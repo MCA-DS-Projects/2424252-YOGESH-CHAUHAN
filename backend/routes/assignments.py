@@ -195,6 +195,26 @@ def create_assignment():
         result = db.assignments.insert_one(assignment_data)
         assignment_data['_id'] = str(result.inserted_id)
         
+        # Send email notification to enrolled students (async, don't block)
+        try:
+            from services.notification_service import notify_course_participants
+            import threading
+            
+            subject = f"New Assignment: {validated_data['title']}"
+            body = f"A new assignment '{validated_data['title']}' has been posted.\n\nDue Date: {validated_data['due_date'].strftime('%Y-%m-%d %H:%M')}\n\nPlease check the course page for details."
+            
+            # Run in background thread
+            thread = threading.Thread(
+                target=notify_course_participants,
+                args=(db, validated_data['course_id'], subject, body),
+                kwargs={'include_teacher': False}
+            )
+            thread.daemon = True
+            thread.start()
+        except Exception as notif_error:
+            # Don't fail assignment creation if notification fails
+            print(f"Failed to send assignment notification: {notif_error}")
+        
         return jsonify({
             'message': 'Assignment created successfully',
             'assignment': assignment_data
@@ -232,6 +252,18 @@ def update_assignment(assignment_id):
         if not validated_data:
             return jsonify({'error': 'No valid fields to update'}), 400
         
+        # Check if due_date is being changed
+        due_date_changed = False
+        old_due_date = None
+        new_due_date = None
+        
+        if 'due_date' in validated_data:
+            old_due_date = assignment.get('due_date')
+            new_due_date = validated_data['due_date']
+            # Check if the dates are actually different
+            if old_due_date != new_due_date:
+                due_date_changed = True
+        
         validated_data['updated_at'] = datetime.utcnow()
         update_data = validated_data
         
@@ -244,6 +276,29 @@ def update_assignment(assignment_id):
         # Get updated assignment
         updated_assignment = db.assignments.find_one({'_id': ObjectId(assignment_id)})
         updated_assignment['_id'] = str(updated_assignment['_id'])
+        
+        # Send notification to students if due date changed (async, don't block)
+        if due_date_changed:
+            try:
+                from services.notification_service import notify_course_participants
+                import threading
+                
+                subject = f"Assignment Due Date Updated: {assignment['title']}"
+                old_date_str = old_due_date.strftime('%Y-%m-%d %H:%M') if old_due_date else 'N/A'
+                new_date_str = new_due_date.strftime('%Y-%m-%d %H:%M') if new_due_date else 'N/A'
+                body = f"The due date for assignment '{assignment['title']}' has been updated.\n\nOld Due Date: {old_date_str}\nNew Due Date: {new_date_str}\n\nPlease plan accordingly."
+                
+                # Run in background thread
+                thread = threading.Thread(
+                    target=notify_course_participants,
+                    args=(db, assignment['course_id'], subject, body),
+                    kwargs={'include_teacher': False}
+                )
+                thread.daemon = True
+                thread.start()
+            except Exception as notif_error:
+                # Don't fail update if notification fails
+                print(f"Failed to send due date update notification: {notif_error}")
         
         return jsonify({
             'message': 'Assignment updated successfully',
@@ -347,6 +402,82 @@ def submit_assignment(assignment_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@assignments_bp.route('/<assignment_id>', methods=['DELETE'])
+@jwt_required()
+def delete_assignment(assignment_id):
+    """
+    Delete an assignment.
+    Teachers can delete their own assignments.
+    Admins can delete any assignment.
+    """
+    try:
+        user_id = get_jwt_identity()
+        db = current_app.db
+        
+        # Get user and assignment
+        user = db.users.find_one({'_id': ObjectId(user_id)})
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        assignment = db.assignments.find_one({'_id': ObjectId(assignment_id)})
+        if not assignment:
+            return jsonify({'error': 'Assignment not found'}), 404
+        
+        # Check permissions
+        is_admin = user['role'] in ['admin', 'super_admin']
+        is_teacher = user['role'] == 'teacher'
+        
+        # Get course to check ownership
+        course = db.courses.find_one({'_id': ObjectId(assignment['course_id'])})
+        is_owner = is_teacher and course and course['teacher_id'] == user_id
+        
+        # Allow deletion if admin OR (teacher AND owner)
+        if not (is_admin or is_owner):
+            return jsonify({'error': 'Access denied. You can only delete your own assignments.'}), 403
+        
+        # Delete related submissions
+        db.submissions.delete_many({'assignment_id': assignment_id})
+        
+        # Delete the assignment
+        db.assignments.delete_one({'_id': ObjectId(assignment_id)})
+        
+        # Send notification to course participants (async, don't block on failure)
+        try:
+            from services.notification_service import notify_course_participants, notify_users_by_role
+            import threading
+            
+            subject = f"Assignment Deleted: {assignment['title']}"
+            body = f"The assignment '{assignment['title']}' has been deleted from the course."
+            
+            # Notify course participants (students)
+            thread1 = threading.Thread(
+                target=notify_course_participants,
+                args=(db, assignment['course_id'], subject, body),
+                kwargs={'include_teacher': False}
+            )
+            thread1.daemon = True
+            thread1.start()
+            
+            # Notify admins about the deletion
+            admin_subject = f"Assignment Deleted: {assignment['title']}"
+            admin_body = f"An assignment has been deleted:\n\nTitle: {assignment['title']}\nCourse ID: {assignment['course_id']}\nDeleted by: {user['name']} ({user['role']})"
+            
+            thread2 = threading.Thread(
+                target=notify_users_by_role,
+                args=(db, ['admin', 'super_admin'], admin_subject, admin_body)
+            )
+            thread2.daemon = True
+            thread2.start()
+        except Exception as notif_error:
+            # Don't fail deletion if notification fails
+            print(f"Failed to send deletion notification: {notif_error}")
+        
+        return jsonify({'message': 'Assignment deleted successfully'}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @assignments_bp.route('/submissions/<submission_id>/grade', methods=['POST'])
 @jwt_required()
 def grade_submission(submission_id):
@@ -400,19 +531,19 @@ def grade_submission(submission_id):
         # Update student's total points
         db.users.update_one(
             {'_id': ObjectId(submission['student_id'])},
-            {'$inc': {'total_points': grade}}
+            {'$inc': {'total_points': validated_data['grade']}}
         )
         
         # Create notification for student
         try:
-            percentage = (grade / max_points) * 100
+            percentage = (validated_data['grade'] / max_points) * 100
             notification_type = 'success' if percentage >= 70 else 'warning' if percentage >= 50 else 'error'
             
             create_notification(
                 db=db,
                 user_id=submission['student_id'],
                 title='Assignment Graded',
-                message=f'Your assignment "{assignment["title"]}" has been graded. Score: {grade}/{max_points} ({percentage:.1f}%)',
+                message=f'Your assignment "{assignment["title"]}" has been graded. Score: {validated_data["grade"]}/{max_points} ({percentage:.1f}%)',
                 notification_type=notification_type,
                 link=f'/assignments/detail?id={assignment["_id"]}'
             )
