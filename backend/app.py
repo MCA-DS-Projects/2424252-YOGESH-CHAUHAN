@@ -172,7 +172,7 @@ def revoked_token_callback(jwt_header, jwt_payload):
     return jsonify({'error': 'Token has been revoked', 'code': 'TOKEN_REVOKED'}), 401
 
 if __name__ == '__main__':
-    # Initialize database with sample data if needed
+    # Initialize database indexes
     from utils.db_init import initialize_database
     initialize_database(db)
     
