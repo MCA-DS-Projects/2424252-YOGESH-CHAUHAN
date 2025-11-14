@@ -6,9 +6,13 @@ import os
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash
 from datetime import datetime
+from dotenv import load_dotenv
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add backend directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+
+# Load environment variables
+load_dotenv()
 
 # MongoDB connection
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/edunexa_lms')
