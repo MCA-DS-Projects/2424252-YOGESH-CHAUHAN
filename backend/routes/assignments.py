@@ -1,7 +1,10 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from bson import ObjectId
 from datetime import datetime
+from werkzeug.utils import secure_filename
+import os
+
 from routes.notifications import create_notification
 from utils.validation import (
     validate_assignment_data,
@@ -10,6 +13,21 @@ from utils.validation import (
 )
 
 assignments_bp = Blueprint('assignments', __name__)
+
+UPLOAD_ROOT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
+ASSIGNMENT_UPLOAD_FOLDER = os.path.join(UPLOAD_ROOT, 'assignments')
+os.makedirs(ASSIGNMENT_UPLOAD_FOLDER, exist_ok=True)
+
+ALLOWED_ASSIGNMENT_EXTENSIONS = {
+    'pdf', 'doc', 'docx', 'ppt', 'pptx',
+    'txt', 'md', 'csv', 'zip', 'rar',
+    'py', 'ipynb', 'js', 'ts', 'java'
+}
+MAX_ASSIGNMENT_FILE_SIZE_MB = int(os.getenv('MAX_ASSIGNMENT_FILE_SIZE_MB', '50'))
+
+
+def allowed_assignment_file(filename: str) -> bool:
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_ASSIGNMENT_EXTENSIONS
 
 @assignments_bp.route('/', methods=['GET'])
 @jwt_required()

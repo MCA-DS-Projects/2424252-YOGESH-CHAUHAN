@@ -278,6 +278,120 @@ export const CreateCoursePage: React.FC = () => {
     xhr.send(formData);
   };
 
+  const handleDocumentUpload = async (moduleId: string, lessonId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check file type - allow PDF, DOC, DOCX, PPT, PPTX, TXT
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/plain'
+    ];
+    
+    if (!allowedTypes.includes(file.type)) {
+      const errorMsg = 'Please select a valid document file (PDF, DOC, DOCX, PPT, PPTX, TXT)';
+      setErrors(prev => ({ ...prev, document: errorMsg }));
+      alert(errorMsg);
+      return;
+    }
+
+    // Check file size (max 10MB for documents)
+    if (!isValidFileSize(file.size, 10)) {
+      const errorMsg = `Document file size must be less than 10MB. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB`;
+      setErrors(prev => ({ ...prev, document: errorMsg }));
+      alert(errorMsg);
+      return;
+    }
+    
+    // Clear document error
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors.document;
+      return newErrors;
+    });
+
+    const uploadKey = `${moduleId}-${lessonId}`;
+    const lessonTitle = modules.find(m => m.id === moduleId)?.lessons.find(l => l.id === lessonId)?.title || 'Document';
+    
+    // Get token
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    if (!token) {
+      alert('Please login first. Token not found.');
+      return;
+    }
+
+    // Create FormData
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('title', lessonTitle);
+    formData.append('description', `Document for ${lessonTitle}`);
+
+    // Use XMLHttpRequest for progress tracking
+    const xhr = new XMLHttpRequest();
+
+    // Track upload progress
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        const percentComplete = Math.round((e.loaded / e.total) * 100);
+        setUploadingVideos(prev => ({ ...prev, [uploadKey]: percentComplete }));
+        handleLessonChange(moduleId, lessonId, 'content', `Uploading... ${percentComplete}%`);
+      }
+    });
+
+    // Handle completion
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 201 || xhr.status === 200) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          // Store the document URL or ID
+          handleLessonChange(moduleId, lessonId, 'content', data.documentUrl || data.url || file.name);
+          setUploadingVideos(prev => {
+            const newState = { ...prev };
+            delete newState[uploadKey];
+            return newState;
+          });
+          alert('Document uploaded successfully!');
+        } catch (err) {
+          alert('Upload completed but failed to parse response');
+          handleLessonChange(moduleId, lessonId, 'content', '');
+        }
+      } else {
+        try {
+          const errorData = JSON.parse(xhr.responseText);
+          alert(`Upload failed: ${errorData.error || xhr.status}`);
+        } catch {
+          alert(`Upload failed with status ${xhr.status}`);
+        }
+        handleLessonChange(moduleId, lessonId, 'content', '');
+        setUploadingVideos(prev => {
+          const newState = { ...prev };
+          delete newState[uploadKey];
+          return newState;
+        });
+      }
+    });
+
+    // Handle errors
+    xhr.addEventListener('error', () => {
+      alert('Network error. Please check your connection.');
+      handleLessonChange(moduleId, lessonId, 'content', '');
+      setUploadingVideos(prev => {
+        const newState = { ...prev };
+        delete newState[uploadKey];
+        return newState;
+      });
+    });
+
+    // Open connection and send
+    xhr.open('POST', 'http://localhost:5000/api/documents/upload');
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.send(formData);
+  };
+
   const handleThumbnailUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -753,7 +867,7 @@ export const CreateCoursePage: React.FC = () => {
           </div>
 
           <div className="space-y-6">
-            {modules.map((module, moduleIndex) => (
+            {modules.map((module) => (
               <div key={module.id} className="border-2 border-gray-200 rounded-lg p-6 bg-gray-50">
                 {/* Module Header */}
                 <div className="flex items-start justify-between mb-4">
@@ -787,7 +901,7 @@ export const CreateCoursePage: React.FC = () => {
 
                 {/* Lessons */}
                 <div className="space-y-3 mb-4">
-                  {module.lessons.map((lesson, lessonIndex) => (
+                  {module.lessons.map((lesson) => (
                     <div key={lesson.id} className="bg-white border border-gray-200 rounded-lg p-4">
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                         <div className="md:col-span-2">
@@ -839,7 +953,9 @@ export const CreateCoursePage: React.FC = () => {
                                   />
                                 </label>
                                 {lesson.content && !lesson.content.includes('Uploading') && (
-                                  <Video className="h-5 w-5 text-green-600" title="Video uploaded" />
+                                  <span title="Video uploaded">
+                                    <Video className="h-5 w-5 text-green-600" />
+                                  </span>
                                 )}
                               </div>
                               {uploadingVideos[`${module.id}-${lesson.id}`] !== undefined && (
@@ -857,6 +973,56 @@ export const CreateCoursePage: React.FC = () => {
                                 </div>
                               )}
                             </div>
+                          ) : lesson.type === 'document' ? (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 cursor-pointer text-sm">
+                                  <Upload className="h-4 w-4" />
+                                  {lesson.content && !lesson.content.includes('Uploading') ? 'Change Document' : 'Upload Document'}
+                                  <input
+                                    type="file"
+                                    accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
+                                    onChange={(e) => handleDocumentUpload(module.id, lesson.id, e)}
+                                    className="hidden"
+                                    disabled={uploadingVideos[`${module.id}-${lesson.id}`] !== undefined}
+                                  />
+                                </label>
+                                {lesson.content && !lesson.content.includes('Uploading') && (
+                                  <span title="Document uploaded">
+                                    <BookOpen className="h-5 w-5 text-green-600" />
+                                  </span>
+                                )}
+                              </div>
+                              {uploadingVideos[`${module.id}-${lesson.id}`] !== undefined && (
+                                <div className="w-full">
+                                  <div className="flex justify-between text-xs text-gray-600 mb-1">
+                                    <span>Uploading...</span>
+                                    <span>{uploadingVideos[`${module.id}-${lesson.id}`]}%</span>
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                    <div
+                                      className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                                      style={{ width: `${uploadingVideos[`${module.id}-${lesson.id}`]}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                              <input
+                                type="url"
+                                value={lesson.content && !lesson.content.includes('Uploading') ? lesson.content : ''}
+                                onChange={(e) => handleLessonChange(module.id, lesson.id, 'content', e.target.value)}
+                                placeholder="Or paste document URL"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                              />
+                            </div>
+                          ) : lesson.type === 'assignment' ? (
+                            <input
+                              type="url"
+                              value={lesson.content}
+                              onChange={(e) => handleLessonChange(module.id, lesson.id, 'content', e.target.value)}
+                              placeholder="Assignment instructions URL or description"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
                           ) : (
                             <input
                               type="url"

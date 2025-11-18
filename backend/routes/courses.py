@@ -701,6 +701,48 @@ def update_progress(course_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@courses_bp.route('/<course_id>', methods=['DELETE'])
+@jwt_required()
+def delete_course(course_id):
+    try:
+        user_id = get_jwt_identity()
+        db = current_app.db
+        
+        # Get course and check permissions
+        course = db.courses.find_one({'_id': ObjectId(course_id)})
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        user = db.users.find_one({'_id': ObjectId(user_id)})
+        if user['role'] != 'admin' and course['teacher_id'] != user_id:
+            return jsonify({'error': 'Access denied'}), 403
+        
+        # Soft delete: Set is_active to False
+        db.courses.update_one(
+            {'_id': ObjectId(course_id)},
+            {'$set': {'is_active': False, 'updated_at': datetime.utcnow()}}
+        )
+        
+        # Notify enrolled students about course deletion
+        enrollments = list(db.enrollments.find({'course_id': course_id}))
+        for enrollment in enrollments:
+            try:
+                create_notification(
+                    db=db,
+                    user_id=enrollment['student_id'],
+                    title='Course Deactivated',
+                    message=f'The course "{course["title"]}" has been deactivated by the instructor.',
+                    notification_type='warning',
+                    link=f'/courses'
+                )
+            except Exception as notif_error:
+                print(f"Failed to create notification: {notif_error}")
+        
+        return jsonify({'message': 'Course deleted successfully'}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @courses_bp.route('/<course_id>/students', methods=['GET'])
 @jwt_required()
 def get_course_students(course_id):

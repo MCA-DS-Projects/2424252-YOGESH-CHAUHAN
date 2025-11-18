@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Calendar,
   Clock,
@@ -6,67 +6,97 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
-  Users,
   MapPin,
-  Edit,
-  Trash2,
-  Eye
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
+import { useLMS } from '../../contexts/LMSContext';
+import ScheduleAPI, { ScheduleEvent } from '../../services/scheduleAPI';
+import { Toast } from '../common/Toast';
 
-interface Event {
-  id: string;
-  title: string;
-  description: string;
-  type: 'class' | 'meeting' | 'deadline' | 'exam' | 'office-hours';
-  startTime: string;
-  endTime: string;
-  date: string;
-  location?: string;
-  courseName?: string;
-  color: string;
-}
+type CalendarEvent = ScheduleEvent;
 
 export const SchedulePage: React.FC = () => {
+  const { courses, assignments } = useLMS();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
-    type: 'class' as Event['type'],
+    type: 'class' as CalendarEvent['type'],
     startTime: '',
     endTime: '',
     date: '',
     location: '',
-    courseName: ''
+    courseId: ''
   });
 
-  const [events, setEvents] = useState<Event[]>([
-    {
-      id: '1',
-      title: 'Machine Learning Lecture',
-      description: 'Introduction to Neural Networks',
-      type: 'class',
-      startTime: '09:00',
-      endTime: '10:30',
-      date: '2024-02-12',
-      location: 'Room 101',
-      courseName: 'Machine Learning',
-      color: 'bg-blue-500'
-    },
-    {
-      id: '2',
-      title: 'Office Hours',
-      description: 'Available for student questions',
-      type: 'office-hours',
-      startTime: '14:00',
-      endTime: '16:00',
-      date: '2024-02-12',
-      location: 'Office 205',
-      color: 'bg-green-500'
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [creatingEvent, setCreatingEvent] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const fetchEvents = async () => {
+    try {
+      setError(null);
+      const data = await ScheduleAPI.getEvents();
+      
+      // Convert assignments to schedule events
+      const assignmentEvents: CalendarEvent[] = assignments.map(assignment => {
+        const dueDate = new Date(assignment.dueDate);
+        const dateStr = dueDate.toISOString().split('T')[0];
+        
+        // Find course title
+        const course = courses.find(c => c.id === assignment.courseId);
+        
+        // Determine color based on status
+        let color = 'bg-red-500'; // Default for pending
+        if (assignment.status === 'graded') {
+          color = 'bg-green-500';
+        } else if (assignment.status === 'submitted') {
+          color = 'bg-yellow-500';
+        }
+        
+        // Add status to description
+        const statusText = assignment.status === 'pending' ? 'Not Submitted' : 
+                          assignment.status === 'submitted' ? 'Submitted - Awaiting Grade' :
+                          `Graded: ${assignment.grade || 'N/A'}`;
+        
+        const fullDescription = `${assignment.description}\n\nStatus: ${statusText}`;
+        
+        return {
+          id: `assignment-${assignment.id}`,
+          title: assignment.title,
+          description: fullDescription,
+          type: 'deadline' as const,
+          date: dateStr,
+          startTime: '23:59',
+          endTime: '23:59',
+          courseId: assignment.courseId,
+          courseTitle: course?.title || 'Unknown Course',
+          color: color,
+          isShared: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+      });
+      
+      // Combine user events and assignment events
+      setEvents([...data, ...assignmentEvents]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load schedule.';
+      setError(message);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    fetchEvents();
+  }, [assignments, courses]);
 
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(':');
@@ -98,9 +128,9 @@ export const SchedulePage: React.FC = () => {
 
   const weekDates = getWeekDates(currentDate);
 
-  const handleAddEvent = () => {
+  const handleAddEvent = async () => {
     if (!newEvent.title || !newEvent.date || !newEvent.startTime || !newEvent.endTime) {
-      alert('Please fill in all required fields');
+      setToast({ type: 'error', message: 'Please fill in all required fields.' });
       return;
     }
 
@@ -112,31 +142,41 @@ export const SchedulePage: React.FC = () => {
       'office-hours': 'bg-green-500'
     };
 
-    const event: Event = {
-      id: Date.now().toString(),
-      title: newEvent.title,
-      description: newEvent.description,
-      type: newEvent.type,
-      startTime: newEvent.startTime,
-      endTime: newEvent.endTime,
-      date: newEvent.date,
-      location: newEvent.location,
-      courseName: newEvent.courseName,
-      color: eventColors[newEvent.type]
-    };
+    setCreatingEvent(true);
+    try {
+      const created = await ScheduleAPI.createEvent({
+        title: newEvent.title,
+        description: newEvent.description,
+        type: newEvent.type,
+        date: newEvent.date,
+        startTime: newEvent.startTime,
+        endTime: newEvent.endTime,
+        location: newEvent.location,
+        courseId: newEvent.courseId || undefined
+      });
 
-    setEvents(prev => [...prev, event]);
-    setNewEvent({
-      title: '',
-      description: '',
-      type: 'class',
-      startTime: '',
-      endTime: '',
-      date: '',
-      location: '',
-      courseName: ''
-    });
-    setShowAddEventModal(false);
+      setEvents(prev => [...prev, { ...created, color: created.color || eventColors[newEvent.type] }]);
+      setNewEvent({
+        title: '',
+        description: '',
+        type: 'class' as CalendarEvent['type'],
+        startTime: '',
+        endTime: '',
+        date: '',
+        location: '',
+        courseId: ''
+      });
+      setShowAddEventModal(false);
+      setToast({ type: 'success', message: 'Event added to your schedule.' });
+      
+      // Refresh events to include any new assignments
+      fetchEvents();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create event.';
+      setToast({ type: 'error', message });
+    } finally {
+      setCreatingEvent(false);
+    }
   };
 
   const navigateWeek = (direction: 'prev' | 'next') => {
@@ -165,75 +205,125 @@ export const SchedulePage: React.FC = () => {
             Add Event
           </button>
         </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">
-            {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-          </h2>
+        
+        {/* Assignment Status Legend */}
+        <div className="mt-4 flex flex-wrap gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => navigateWeek('prev')}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <button 
-              onClick={goToToday}
-              className="px-3 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg"
-            >
-              Today
-            </button>
-            <button 
-              onClick={() => navigateWeek('next')}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
+            <span className="text-lg">📝</span>
+            <span className="text-gray-600">Pending Assignment</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⏳</span>
+            <span className="text-gray-600">Submitted Assignment</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">✅</span>
+            <span className="text-gray-600">Graded Assignment</span>
           </div>
         </div>
-
-        <div className="grid grid-cols-7 gap-1">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-            <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
-              {day}
-            </div>
-          ))}
-
-          {weekDates.map((date, index) => {
-            const dayEvents = getEventsForDate(date);
-            const isToday = date.toDateString() === new Date().toDateString();
-
-            return (
-              <div
-                key={index}
-                className={`min-h-[120px] p-2 border border-gray-100 ${isToday ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50'
-                  }`}
-              >
-                <div className={`text-sm font-medium mb-2 ${isToday ? 'text-blue-600' : 'text-gray-900'
-                  }`}>
-                  {date.getDate()}
-                </div>
-                <div className="space-y-1">
-                  {dayEvents.map((event) => (
-                    <button
-                      key={event.id}
-                      onClick={() => {
-                        setSelectedEvent(event);
-                        setShowEventModal(true);
-                      }}
-                      className={`w-full text-left p-1 rounded text-xs text-white truncate ${event.color} hover:opacity-80`}
-                    >
-                      {formatTime(event.startTime)} {event.title}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
+
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-2 text-red-700 font-medium">
+            <AlertTriangle className="h-5 w-5" />
+            Error loading schedule
+          </div>
+          <p className="text-sm text-red-600 flex-1">{error}</p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              fetchEvents();
+            }}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <Loader2 className="h-12 w-12 text-blue-600 mx-auto mb-4 animate-spin" />
+          <p className="text-gray-600">Loading your schedule...</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">
+              {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </h2>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => navigateWeek('prev')}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button 
+                onClick={goToToday}
+                className="px-3 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg"
+              >
+                Today
+              </button>
+              <button 
+                onClick={() => navigateWeek('next')}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+              <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
+                {day}
+              </div>
+            ))}
+
+            {weekDates.map((date, index) => {
+              const dayEvents = getEventsForDate(date);
+              const isToday = date.toDateString() === new Date().toDateString();
+
+              return (
+                <div
+                  key={index}
+                  className={`min-h-[120px] p-2 border border-gray-100 ${isToday ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50'
+                    }`}
+                >
+                  <div className={`text-sm font-medium mb-2 ${isToday ? 'text-blue-600' : 'text-gray-900'
+                    }`}>
+                    {date.getDate()}
+                  </div>
+                  <div className="space-y-1">
+                    {dayEvents.map((event) => {
+                      const isAssignment = event.id.startsWith('assignment-');
+                      const statusIcon = isAssignment ? 
+                        (event.color === 'bg-green-500' ? '✅ ' : 
+                         event.color === 'bg-yellow-500' ? '⏳ ' : '📝 ') : '';
+                      
+                      return (
+                        <button
+                          key={event.id}
+                          onClick={() => {
+                            setSelectedEvent(event);
+                            setShowEventModal(true);
+                          }}
+                          className={`w-full text-left p-1 rounded text-xs text-white truncate ${event.color} hover:opacity-80`}
+                        >
+                          {isAssignment ? statusIcon : formatTime(event.startTime) + ' '}
+                          {event.title}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Add Event Modal */}
       {showAddEventModal && (
@@ -247,12 +337,12 @@ export const SchedulePage: React.FC = () => {
                   setNewEvent({
                     title: '',
                     description: '',
-                    type: 'class',
+                    type: 'class' as CalendarEvent['type'],
                     startTime: '',
                     endTime: '',
                     date: '',
                     location: '',
-                    courseName: ''
+        courseId: ''
                   });
                 }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -284,7 +374,7 @@ export const SchedulePage: React.FC = () => {
                 </label>
                 <select
                   value={newEvent.type}
-                  onChange={(e) => setNewEvent(prev => ({ ...prev, type: e.target.value as Event['type'] }))}
+                  onChange={(e) => setNewEvent(prev => ({ ...prev, type: e.target.value as CalendarEvent['type'] }))}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="class">Class</option>
@@ -339,15 +429,20 @@ export const SchedulePage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Course Name
+                    Course (Optional)
                   </label>
-                  <input
-                    type="text"
-                    value={newEvent.courseName}
-                    onChange={(e) => setNewEvent(prev => ({ ...prev, courseName: e.target.value }))}
-                    placeholder="e.g., Machine Learning"
+                  <select
+                    value={newEvent.courseId}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, courseId: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  >
+                    <option value="">General</option>
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.title}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -390,7 +485,7 @@ export const SchedulePage: React.FC = () => {
                     endTime: '',
                     date: '',
                     location: '',
-                    courseName: ''
+        courseId: ''
                   });
                 }}
                 className="px-6 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
@@ -399,10 +494,20 @@ export const SchedulePage: React.FC = () => {
               </button>
               <button
                 onClick={handleAddEvent}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                disabled={creatingEvent}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
-                <Plus className="h-4 w-4" />
-                Add Event
+                {creatingEvent ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Add Event
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -429,22 +534,37 @@ export const SchedulePage: React.FC = () => {
             <div className="p-6 space-y-4">
               <div className="flex items-center gap-3">
                 <div className={`w-4 h-4 rounded-full ${selectedEvent.color}`}></div>
-                <span className="text-sm font-medium text-gray-600 capitalize">{selectedEvent.type}</span>
+                <span className="text-sm font-medium text-gray-600 capitalize">
+                  {selectedEvent.id.startsWith('assignment-') ? 'Assignment Deadline' : selectedEvent.type}
+                </span>
+                {selectedEvent.id.startsWith('assignment-') && (
+                  <span className={`ml-auto px-2 py-1 rounded-full text-xs font-medium ${
+                    selectedEvent.color === 'bg-green-500' ? 'bg-green-100 text-green-700' :
+                    selectedEvent.color === 'bg-yellow-500' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {selectedEvent.color === 'bg-green-500' ? 'Graded' :
+                     selectedEvent.color === 'bg-yellow-500' ? 'Submitted' :
+                     'Pending'}
+                  </span>
+                )}
               </div>
 
-              {selectedEvent.courseName && (
+              {selectedEvent.courseTitle && (
                 <div className="flex items-center gap-3">
                   <BookOpen className="h-5 w-5 text-gray-400" />
-                  <span className="text-gray-700">{selectedEvent.courseName}</span>
+                  <span className="text-gray-700">{selectedEvent.courseTitle}</span>
                 </div>
               )}
 
-              <div className="flex items-center gap-3">
-                <Clock className="h-5 w-5 text-gray-400" />
-                <span className="text-gray-700">
-                  {formatTime(selectedEvent.startTime)} - {formatTime(selectedEvent.endTime)}
-                </span>
-              </div>
+              {!selectedEvent.id.startsWith('assignment-') && (
+                <div className="flex items-center gap-3">
+                  <Clock className="h-5 w-5 text-gray-400" />
+                  <span className="text-gray-700">
+                    {formatTime(selectedEvent.startTime)} - {formatTime(selectedEvent.endTime)}
+                  </span>
+                </div>
+              )}
 
               <div className="flex items-center gap-3">
                 <Calendar className="h-5 w-5 text-gray-400" />
@@ -455,6 +575,7 @@ export const SchedulePage: React.FC = () => {
                     month: 'long',
                     day: 'numeric'
                   })}
+                  {selectedEvent.id.startsWith('assignment-') && ' (Due Date)'}
                 </span>
               </div>
 
@@ -467,7 +588,7 @@ export const SchedulePage: React.FC = () => {
 
               {selectedEvent.description && (
                 <div className="pt-4 border-t border-gray-200">
-                  <p className="text-gray-700">{selectedEvent.description}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{selectedEvent.description}</p>
                 </div>
               )}
             </div>
@@ -485,6 +606,14 @@ export const SchedulePage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Trophy, 
   Award, 
@@ -15,142 +15,41 @@ import {
   Filter,
   Search,
   Calendar,
-  Share2
+  Share2,
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
-
-interface Achievement {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  category: 'learning' | 'engagement' | 'performance' | 'social' | 'special';
-  rarity: 'common' | 'rare' | 'epic' | 'legendary';
-  points: number;
-  unlockedAt?: string;
-  progress?: {
-    current: number;
-    total: number;
-  };
-  requirements: string[];
-}
+import AchievementAPI, { Achievement } from '../../services/achievementAPI';
 
 export const AchievementsPage: React.FC = () => {
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [userRank, setUserRank] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [achievements] = useState<Achievement[]>([
-    {
-      id: '1',
-      title: 'First Steps',
-      description: 'Complete your first course',
-      icon: '🎓',
-      category: 'learning',
-      rarity: 'common',
-      points: 10,
-      unlockedAt: '2024-01-15T10:30:00Z',
-      requirements: ['Complete 1 course']
-    },
-    {
-      id: '2',
-      title: 'Assignment Master',
-      description: 'Score 100% on 5 assignments',
-      icon: '🏆',
-      category: 'performance',
-      rarity: 'rare',
-      points: 50,
-      unlockedAt: '2024-01-25T14:20:00Z',
-      requirements: ['Score 100% on 5 assignments']
-    },
-    {
-      id: '3',
-      title: 'Week Warrior',
-      description: 'Study for 7 consecutive days',
-      icon: '🔥',
-      category: 'engagement',
-      rarity: 'rare',
-      points: 30,
-      unlockedAt: '2024-01-20T09:15:00Z',
-      requirements: ['Study for 7 consecutive days']
-    },
-    {
-      id: '4',
-      title: 'AI Enthusiast',
-      description: 'Complete 3 AI-related courses',
-      icon: '🤖',
-      category: 'learning',
-      rarity: 'epic',
-      points: 100,
-      unlockedAt: '2024-02-01T16:45:00Z',
-      requirements: ['Complete 3 AI courses']
-    },
-    {
-      id: '5',
-      title: 'Speed Learner',
-      description: 'Complete a course in under 2 weeks',
-      icon: '⚡',
-      category: 'performance',
-      rarity: 'rare',
-      points: 40,
-      progress: { current: 8, total: 14 },
-      requirements: ['Complete a course in under 14 days']
-    },
-    {
-      id: '6',
-      title: 'Social Butterfly',
-      description: 'Participate in 10 discussion threads',
-      icon: '🦋',
-      category: 'social',
-      rarity: 'common',
-      points: 20,
-      progress: { current: 6, total: 10 },
-      requirements: ['Participate in 10 discussions']
-    },
-    {
-      id: '7',
-      title: 'Perfect Score',
-      description: 'Get 100% on all assignments in a course',
-      icon: '💯',
-      category: 'performance',
-      rarity: 'epic',
-      points: 75,
-      progress: { current: 4, total: 5 },
-      requirements: ['Score 100% on all assignments in one course']
-    },
-    {
-      id: '8',
-      title: 'Knowledge Seeker',
-      description: 'Complete 10 courses',
-      icon: '📚',
-      category: 'learning',
-      rarity: 'legendary',
-      points: 200,
-      progress: { current: 3, total: 10 },
-      requirements: ['Complete 10 courses']
-    },
-    {
-      id: '9',
-      title: 'Early Bird',
-      description: 'Submit 5 assignments before the deadline',
-      icon: '🐦',
-      category: 'engagement',
-      rarity: 'common',
-      points: 15,
-      unlockedAt: '2024-01-18T08:00:00Z',
-      requirements: ['Submit 5 assignments early']
-    },
-    {
-      id: '10',
-      title: 'Mentor',
-      description: 'Help 5 fellow students in discussions',
-      icon: '🎯',
-      category: 'social',
-      rarity: 'epic',
-      points: 80,
-      progress: { current: 2, total: 5 },
-      requirements: ['Help 5 students in discussions']
+  const fetchAchievements = async () => {
+    try {
+      setError(null);
+      const [achievementsData, rankData] = await Promise.all([
+        AchievementAPI.getAchievements(),
+        AchievementAPI.getUserRank()
+      ]);
+      setAchievements(achievementsData);
+      setUserRank(rankData.rank || 0);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load achievements.';
+      setError(message);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    fetchAchievements();
+  }, []);
 
   const getRarityColor = (rarity: string) => {
     switch (rarity) {
@@ -185,8 +84,8 @@ export const AchievementsPage: React.FC = () => {
 
   const filteredAchievements = achievements
     .filter(achievement => {
-      if (filter === 'unlocked') return achievement.unlockedAt;
-      if (filter === 'locked') return !achievement.unlockedAt;
+      if (filter === 'unlocked') return achievement.unlocked_at;
+      if (filter === 'locked') return !achievement.unlocked_at;
       return true;
     })
     .filter(achievement => {
@@ -199,10 +98,10 @@ export const AchievementsPage: React.FC = () => {
     );
 
   const totalPoints = achievements
-    .filter(a => a.unlockedAt)
+    .filter(a => a.unlocked_at)
     .reduce((sum, a) => sum + a.points, 0);
 
-  const unlockedCount = achievements.filter(a => a.unlockedAt).length;
+  const unlockedCount = achievements.filter(a => a.unlocked_at).length;
   const totalCount = achievements.length;
 
   const categories = [
@@ -214,7 +113,10 @@ export const AchievementsPage: React.FC = () => {
     { id: 'special', label: 'Special', icon: Crown }
   ];
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) {
+      return '—';
+    }
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -230,6 +132,32 @@ export const AchievementsPage: React.FC = () => {
         <p className="text-gray-600">Track your learning milestones and unlock rewards</p>
       </div>
 
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-2 text-red-700 font-medium">
+            <AlertTriangle className="h-5 w-5" />
+            Error loading achievements
+          </div>
+          <p className="text-sm text-red-600 flex-1">{error}</p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              fetchAchievements();
+            }}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <Loader2 className="h-12 w-12 text-blue-600 mx-auto mb-4 animate-spin" />
+          <p className="text-gray-600">Loading achievements...</p>
+        </div>
+      ) : (
+        <>
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -274,8 +202,8 @@ export const AchievementsPage: React.FC = () => {
               <Target className="h-6 w-6 text-orange-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Rank</p>
-              <p className="text-2xl font-bold text-gray-900">#12</p>
+              <p className="text-sm text-gray-600">Total Achievements</p>
+              <p className="text-2xl font-bold text-gray-900">{unlockedCount}</p>
             </div>
           </div>
         </div>
@@ -334,7 +262,7 @@ export const AchievementsPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredAchievements.map((achievement) => {
           const CategoryIcon = getCategoryIcon(achievement.category);
-          const isUnlocked = !!achievement.unlockedAt;
+          const isUnlocked = !!achievement.unlocked_at;
           
           return (
             <div
@@ -419,7 +347,7 @@ export const AchievementsPage: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-gray-400" />
                     <span className="text-xs text-gray-500">
-                      {formatDate(achievement.unlockedAt!)}
+                      {formatDate(achievement.unlocked_at!)}
                     </span>
                   </div>
                 ) : (
@@ -449,6 +377,9 @@ export const AchievementsPage: React.FC = () => {
           <p className="text-gray-600">Try adjusting your search or filter criteria</p>
         </div>
       )}
+        </>
+      )}
+
     </div>
   );
 };

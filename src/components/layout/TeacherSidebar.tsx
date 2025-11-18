@@ -26,6 +26,10 @@ interface SidebarItem {
   badge?: number;
 }
 
+interface SidebarSection {
+  items: SidebarItem[];
+}
+
 export const TeacherSidebar: React.FC = () => {
   const { sidebarOpen, setSidebarOpen } = useLMS();
   const { user } = useAuth();
@@ -81,18 +85,34 @@ export const TeacherSidebar: React.FC = () => {
     }
   }, [user]);
 
-  const navigationItems: SidebarItem[] = [
-    { icon: Home, label: 'Dashboard', href: '/dashboard' },
-    { icon: BookOpen, label: 'My Courses', href: '/courses' },
-    { icon: PlusCircle, label: 'Create Course', href: '/courses/create' },
-    { icon: Video, label: 'Video Management', href: '/videos' },
-    { icon: Assignment, label: 'Assignments', href: '/assignments/teacher' },
-    { icon: Users, label: 'My Students', href: '/students' },
-    { icon: BarChart3, label: 'Analytics', href: '/analytics' },
-    { icon: Brain, label: 'AI Assistant', href: '/ai-assistant' },
-    { icon: Bell, label: 'Notifications', href: '/notifications', badge: unreadNotifications || undefined },
-    { icon: User, label: 'Profile', href: '/profile' },
-    { icon: Settings, label: 'Settings', href: '/settings' }
+  // Navigation organized into 3 logical sections
+  const navigationSections: SidebarSection[] = [
+    {
+      // Core Teaching Section - Primary features
+      items: [
+        { icon: Home, label: 'Dashboard', href: '/dashboard' },
+        { icon: BookOpen, label: 'My Courses', href: '/courses' },
+        { icon: PlusCircle, label: 'Create Course', href: '/courses/create' },
+        { icon: Video, label: 'Video Management', href: '/videos' }
+      ]
+    },
+    {
+      // Student Management Section
+      items: [
+        { icon: Assignment, label: 'Assignments', href: '/assignments/teacher' },
+        { icon: Users, label: 'My Students', href: '/students' },
+        { icon: BarChart3, label: 'Analytics', href: '/analytics' }
+      ]
+    },
+    {
+      // Tools & Settings Section
+      items: [
+        { icon: Brain, label: 'AI Assistant', href: '/ai-assistant' },
+        { icon: Bell, label: 'Notifications', href: '/notifications', badge: unreadNotifications || undefined },
+        { icon: User, label: 'Profile', href: '/profile' },
+        { icon: Settings, label: 'Settings', href: '/settings' }
+      ]
+    }
   ];
 
   const handleNavigation = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
@@ -154,7 +174,9 @@ export const TeacherSidebar: React.FC = () => {
       }`}>
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200">
+          <div className={`flex items-center border-b border-gray-200 p-3 sm:p-4 ${
+            sidebarOpen || isMobile ? 'justify-between' : 'justify-center'
+          }`}>
             {(sidebarOpen || isMobile) && (
               <div className="flex items-center gap-2">
                 <div className="bg-gradient-to-r from-green-600 to-blue-600 p-1.5 sm:p-2 rounded-lg">
@@ -166,49 +188,81 @@ export const TeacherSidebar: React.FC = () => {
                 </div>
               </div>
             )}
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              {sidebarOpen ? (
-                <ChevronLeft className="h-5 w-5 text-gray-600" />
-              ) : (
-                <ChevronRight className="h-5 w-5 text-gray-600" />
-              )}
-            </button>
+            {!isMobile && (
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              >
+                {sidebarOpen ? (
+                  <ChevronLeft className="h-5 w-5 text-gray-600" />
+                ) : (
+                  <ChevronRight className="h-5 w-5 text-gray-600" />
+                )}
+              </button>
+            )}
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-2 sm:px-4 py-4 sm:py-6 space-y-1 sm:space-y-2 overflow-y-auto">
-            {navigationItems.map((item, index) => (
-              <a
-                key={index}
-                href={item.href}
-                onClick={(e) => handleNavigation(e, item.href)}
-                className={`flex items-center gap-3 px-2 sm:px-3 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg transition-all duration-200 group ${
-                  isActivePath(item.href)
-                    ? 'bg-green-50 text-green-600'
-                    : 'text-gray-700 hover:bg-green-50 hover:text-green-600'
-                }`}
-              >
-                <item.icon className="h-5 w-5 flex-shrink-0" />
-                {(sidebarOpen || isMobile) && (
-                  <>
-                    <span className="font-medium">{item.label}</span>
-                    {item.badge && (
-                      <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 sm:py-1 rounded-full min-w-[20px] text-center">
-                        {item.badge > 9 ? '9+' : item.badge}
-                      </span>
-                    )}
-                  </>
+          <nav className="flex-1 px-2 sm:px-4 py-4 sm:py-6 overflow-y-auto">
+            {navigationSections.map((section, sectionIndex) => (
+              <div key={sectionIndex}>
+                {/* Navigation Items within Section - 8px spacing between items (space-y-2 = 0.5rem = 8px) */}
+                <div className="space-y-2">
+                  {section.items.map((item, itemIndex) => (
+                    <a
+                      key={itemIndex}
+                      href={item.href}
+                      onClick={(e) => handleNavigation(e, item.href)}
+                      title={!sidebarOpen && !isMobile ? item.label : undefined}
+                      className={`flex items-center gap-3 px-2 sm:px-3 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg transition-all duration-200 ease-in-out group relative ${
+                        sidebarOpen || isMobile ? '' : 'justify-center'
+                      } ${
+                        isActivePath(item.href)
+                          ? 'bg-green-50 text-green-600 shadow-sm border-l-4 border-green-600 font-semibold'
+                          : 'text-gray-700 hover:bg-green-50 hover:text-green-600 hover:shadow-sm hover:translate-x-1'
+                      }`}
+                    >
+                      <item.icon className={`h-5 w-5 flex-shrink-0 transition-all duration-200 ease-in-out ${
+                        isActivePath(item.href) ? 'text-green-600' : 'text-gray-500 group-hover:text-green-600 group-hover:scale-110'
+                      }`} />
+                      {(sidebarOpen || isMobile) && (
+                        <>
+                          <span className={`font-medium transition-colors duration-200 ${
+                            isActivePath(item.href) ? 'text-green-600' : ''
+                          }`}>{item.label}</span>
+                          {item.badge !== undefined && item.badge > 0 && (
+                            <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 sm:py-1 rounded-full min-w-[20px] text-center font-semibold shadow-sm">
+                              {item.badge > 9 ? '9+' : item.badge}
+                            </span>
+                          )}
+                        </>
+                      )}
+                      {/* Badge indicator for collapsed state */}
+                      {!sidebarOpen && !isMobile && item.badge !== undefined && item.badge > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-semibold shadow-sm">
+                          {item.badge > 9 ? '9+' : item.badge}
+                        </span>
+                      )}
+                    </a>
+                  ))}
+                </div>
+                
+                {/* Section Divider - 16px spacing between sections (my-4 = 1rem = 16px) */}
+                {sectionIndex < navigationSections.length - 1 && (
+                  <div className={`my-4 ${sidebarOpen || isMobile ? 'mx-4' : 'mx-2'}`}>
+                    <div className="h-px bg-gray-200" />
+                  </div>
                 )}
-              </a>
+              </div>
             ))}
           </nav>
 
           {/* User Info */}
-          {(sidebarOpen || isMobile) && (
-            <div className="p-3 sm:p-4 border-t border-gray-200">
+          <div className={`p-3 sm:p-4 border-t border-gray-200 ${
+            !sidebarOpen && !isMobile ? 'flex justify-center' : ''
+          }`}>
+            {(sidebarOpen || isMobile) ? (
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-r from-green-600 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-white text-sm sm:text-base font-medium">
@@ -220,8 +274,17 @@ export const TeacherSidebar: React.FC = () => {
                   <p className="text-xs text-gray-500 capitalize">Teacher</p>
                 </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div 
+                className="w-9 h-9 bg-gradient-to-r from-green-600 to-blue-600 rounded-full flex items-center justify-center cursor-pointer hover:scale-110 transition-transform"
+                title={user?.name}
+              >
+                <span className="text-white text-sm font-medium">
+                  {user?.name.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>

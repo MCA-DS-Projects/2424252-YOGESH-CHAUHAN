@@ -18,6 +18,7 @@ interface Course {
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
   rating: number;
   students: number;
+  is_active?: boolean;
 }
 
 interface Assignment {
@@ -109,7 +110,8 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         rating: 4.5, // Default rating - could be enhanced with real rating data
         students: course.enrolled_students,
         createdAt: new Date(course.created_at).getTime(),
-        duration: course.duration
+        duration: course.duration,
+        is_active: course.is_active !== false
       }));
       
       setCourses(transformedCourses);

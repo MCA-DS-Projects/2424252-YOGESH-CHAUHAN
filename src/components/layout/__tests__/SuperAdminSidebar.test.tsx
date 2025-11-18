@@ -50,8 +50,9 @@ describe('SuperAdminSidebar', () => {
     
     renderWithProviders(<SuperAdminSidebar />)
     
-    const dashboardLink = screen.getByText('Dashboard')
-    await user.click(dashboardLink)
+    const dashboardLink = screen.getByText('Dashboard').closest('a')
+    expect(dashboardLink).toBeInTheDocument()
+    await user.click(dashboardLink!)
     
     expect(mockPushState).toHaveBeenCalledWith({}, '', '/dashboard')
     expect(mockDispatchEvent).toHaveBeenCalled()
@@ -83,12 +84,36 @@ describe('SuperAdminSidebar', () => {
   it('has proper navigation structure with correct hrefs', () => {
     renderWithProviders(<SuperAdminSidebar />)
     
-    const dashboardButton = screen.getByText('Dashboard').closest('button')
-    const userManagementButton = screen.getByText('User Management').closest('button')
-    const settingsButton = screen.getByText('Settings').closest('button')
+    const dashboardLink = screen.getByText('Dashboard').closest('a')
+    const userManagementLink = screen.getByText('User Management').closest('a')
+    const settingsLink = screen.getByText('Settings').closest('a')
     
-    expect(dashboardButton).toBeInTheDocument()
-    expect(userManagementButton).toBeInTheDocument()
-    expect(settingsButton).toBeInTheDocument()
+    expect(dashboardLink).toBeInTheDocument()
+    expect(dashboardLink).toHaveAttribute('href', '/dashboard')
+    expect(userManagementLink).toBeInTheDocument()
+    expect(userManagementLink).toHaveAttribute('href', '/admin/users')
+    expect(settingsLink).toBeInTheDocument()
+    expect(settingsLink).toHaveAttribute('href', '/settings')
+  })
+
+  it('applies active state styling to current page', () => {
+    // Mock current path as dashboard
+    Object.defineProperty(window, 'location', {
+      value: { pathname: '/dashboard' },
+      writable: true
+    })
+    
+    renderWithProviders(<SuperAdminSidebar />)
+    
+    const dashboardLink = screen.getByText('Dashboard').closest('a')
+    expect(dashboardLink).toHaveClass('bg-purple-50', 'text-purple-600')
+  })
+
+  it('displays badge counts only when greater than 0', () => {
+    renderWithProviders(<SuperAdminSidebar />)
+    
+    // No badges should be visible since none are set
+    const badges = document.querySelectorAll('.bg-red-500')
+    expect(badges.length).toBe(0)
   })
 })

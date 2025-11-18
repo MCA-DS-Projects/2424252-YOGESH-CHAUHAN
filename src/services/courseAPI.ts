@@ -208,7 +208,9 @@ export class CourseAPI {
    */
   static async deleteCourse(courseId: string): Promise<void> {
     try {
-      await this.updateCourse(courseId, { is_active: false });
+      await apiClient.delete<{ message: string }>(
+        API_ENDPOINTS.COURSES.BY_ID(courseId)
+      );
     } catch (error) {
       console.error('Failed to delete course:', error);
       throw new Error('Failed to delete course');

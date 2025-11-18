@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLMS } from '../../contexts/LMSContext';
 import LearnerAlerts from '../notifications/LearnerAlerts';
+import { GlobalSearch } from '../search/GlobalSearch';
 import { notificationsAPI } from '../../config/api';
 import {
-  Search,
   Bell,
   MessageSquare,
   LogOut,
@@ -54,30 +54,21 @@ export const Header: React.FC = () => {
             <Menu className="h-5 w-5 text-gray-600" />
           </button>
           
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-full pl-8 sm:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-            />
-          </div>
+          <GlobalSearch />
         </div>
 
         {/* Right Section */}
-        <div className="flex items-center gap-1 sm:gap-2 md:gap-4">
-          {/* Learner Alerts (for teachers and admins) - Hidden on mobile */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Learner Alerts (for teachers and admins) - Distinct orange/red styling */}
           {user && ['teacher', 'super_admin'].includes(user.role) && (
-            <div className="hidden md:block">
-              <LearnerAlerts />
-            </div>
+            <LearnerAlerts />
           )}
 
-          {/* Notifications */}
-          <a href="/notifications" className="relative p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 transition-colors">
+          {/* Notifications - Blue styling to distinguish from learner alerts */}
+          <a href="/notifications" className="relative p-1.5 sm:p-2 rounded-lg hover:bg-blue-50 transition-colors" title="Notifications">
             <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />
             {unreadNotifications > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 bg-red-500 text-white text-[10px] sm:text-xs w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 bg-blue-500 text-white text-[10px] sm:text-xs w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center">
                 {unreadNotifications > 9 ? '9+' : unreadNotifications}
               </span>
             )}

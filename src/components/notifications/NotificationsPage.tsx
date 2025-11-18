@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { notificationsAPI } from '../../config/api';
 import {
   Bell,
   Check,
@@ -14,7 +16,8 @@ import {
   CheckCircle,
   Clock,
   Trash2,
-  Mail
+  Mail,
+  Loader2
 } from 'lucide-react';
 
 interface Notification {
@@ -29,73 +32,37 @@ interface Notification {
 }
 
 export const NotificationsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNotifications, setSelectedNotifications] = useState<string[]>([]);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      type: 'assignment',
-      title: 'Assignment Due Soon',
-      message: 'Your Machine Learning assignment is due in 2 hours',
-      timestamp: '2024-02-10T14:30:00Z',
-      read: false,
-      priority: 'high',
-      actionUrl: '/assignments/1'
-    },
-    {
-      id: '2',
-      type: 'course',
-      title: 'New Course Material',
-      message: 'New lecture notes have been added to Python Programming',
-      timestamp: '2024-02-10T12:15:00Z',
-      read: false,
-      priority: 'medium',
-      actionUrl: '/courses/2'
-    },
-    {
-      id: '3',
-      type: 'achievement',
-      title: 'Achievement Unlocked!',
-      message: 'You earned the "Assignment Master" badge for scoring 100% on 5 assignments',
-      timestamp: '2024-02-10T10:45:00Z',
-      read: true,
-      priority: 'low',
-      actionUrl: '/profile'
-    },
-    {
-      id: '4',
-      type: 'message',
-      title: 'New Message',
-      message: 'Dr. Smith replied to your question about linear regression',
-      timestamp: '2024-02-10T09:20:00Z',
-      read: false,
-      priority: 'medium',
-      actionUrl: '/messages/4'
-    },
-    {
-      id: '5',
-      type: 'system',
-      title: 'System Maintenance',
-      message: 'Scheduled maintenance will occur tonight from 2-4 AM EST',
-      timestamp: '2024-02-09T16:00:00Z',
-      read: true,
-      priority: 'low'
-    },
-    {
-      id: '6',
-      type: 'course',
-      title: 'Course Completed',
-      message: 'Congratulations! You have completed Data Science Fundamentals',
-      timestamp: '2024-02-09T14:30:00Z',
-      read: true,
-      priority: 'high',
-      actionUrl: '/courses/3'
+  // Fetch notifications from API
+  useEffect(() => {
+    fetchNotifications();
+    
+    // Poll for updates every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      setError(null);
+      const response = await notificationsAPI.getAll(false, 50);
+      setNotifications((response as any).notifications || []);
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+      setError('Failed to load notifications. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -147,15 +114,21 @@ export const NotificationsPage: React.FC = () => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(notification =>
-        notification.id === id ? { ...notification, read: true } : notification
-      )
-    );
+  const markAsRead = async (id: string) => {
+    try {
+      await notificationsAPI.markAsRead(id);
+      setNotifications(prev =>
+        prev.map(notification =>
+          notification.id === id ? { ...notification, read: true } : notification
+        )
+      );
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
   };
 
   const markAsUnread = (id: string) => {
+    // Note: API doesn't have mark as unread endpoint, so just update locally
     setNotifications(prev =>
       prev.map(notification =>
         notification.id === id ? { ...notification, read: false } : notification
@@ -163,22 +136,37 @@ export const NotificationsPage: React.FC = () => {
     );
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(notification => notification.id !== id));
-    setSelectedNotifications(prev => prev.filter(selectedId => selectedId !== id));
+  const deleteNotification = async (id: string) => {
+    try {
+      await notificationsAPI.delete(id);
+      setNotifications(prev => prev.filter(notification => notification.id !== id));
+      setSelectedNotifications(prev => prev.filter(selectedId => selectedId !== id));
+    } catch (err) {
+      console.error('Failed to delete notification:', err);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(notification => ({ ...notification, read: true }))
-    );
+  const markAllAsRead = async () => {
+    try {
+      await notificationsAPI.markAllAsRead();
+      setNotifications(prev =>
+        prev.map(notification => ({ ...notification, read: true }))
+      );
+    } catch (err) {
+      console.error('Failed to mark all as read:', err);
+    }
   };
 
-  const deleteSelected = () => {
-    setNotifications(prev =>
-      prev.filter(notification => !selectedNotifications.includes(notification.id))
-    );
-    setSelectedNotifications([]);
+  const deleteSelected = async () => {
+    try {
+      await Promise.all(selectedNotifications.map(id => notificationsAPI.delete(id)));
+      setNotifications(prev =>
+        prev.filter(notification => !selectedNotifications.includes(notification.id))
+      );
+      setSelectedNotifications([]);
+    } catch (err) {
+      console.error('Failed to delete selected notifications:', err);
+    }
   };
 
   const toggleSelectNotification = (id: string) => {
@@ -206,28 +194,8 @@ export const NotificationsPage: React.FC = () => {
 
     // Handle different notification types
     if (notification.actionUrl) {
-      // Simulate navigation - in a real app, you'd use React Router
-      if (notification.actionUrl.includes('/assignments')) {
-        // Navigate to assignments page
-        window.location.hash = '#/assignments';
-        alert(`Navigating to assignment: ${notification.title}`);
-      } else if (notification.actionUrl.includes('/courses')) {
-        // Navigate to courses page
-        window.location.hash = '#/courses';
-        alert(`Navigating to course: ${notification.title}`);
-      } else if (notification.actionUrl.includes('/messages')) {
-        // Navigate to messages page
-        window.location.hash = '#/messages';
-        alert(`Opening message: ${notification.title}`);
-      } else if (notification.actionUrl.includes('/profile')) {
-        // Navigate to profile page
-        window.location.hash = '#/profile';
-        alert(`Opening profile: ${notification.title}`);
-      } else {
-        // Show notification details
-        setSelectedNotification(notification);
-        setShowDetailModal(true);
-      }
+      // Use React Router for navigation
+      navigate(notification.actionUrl);
     } else {
       // Show notification details for notifications without action URLs
       setSelectedNotification(notification);
@@ -243,7 +211,7 @@ export const NotificationsPage: React.FC = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Notifications</h1>
             <p className="text-gray-600">
-              {unreadCount > 0 ? `You have ${unreadCount} unread notifications` : 'All caught up!'}
+              {loading ? 'Loading...' : unreadCount > 0 ? `You have ${unreadCount} unread notifications` : 'All caught up!'}
             </p>
           </div>
           <div className="flex gap-2">
@@ -258,7 +226,8 @@ export const NotificationsPage: React.FC = () => {
             )}
             <button
               onClick={markAllAsRead}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              disabled={loading || unreadCount === 0}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Check className="h-4 w-4" />
               Mark All Read
@@ -266,6 +235,30 @@ export const NotificationsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-red-600" />
+          <div className="flex-1">
+            <p className="text-red-800">{error}</p>
+          </div>
+          <button
+            onClick={fetchNotifications}
+            className="text-red-600 hover:text-red-700 text-sm font-medium"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+          <p className="ml-3 text-gray-600">Loading notifications...</p>
+        </div>
+      )}
 
       {/* Filters and Search */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
@@ -325,8 +318,9 @@ export const NotificationsPage: React.FC = () => {
       </div>
 
       {/* Notifications List */}
-      <div className="space-y-2">
-        {filteredNotifications.length > 0 ? (
+      {!loading && (
+        <div className="space-y-2">
+          {filteredNotifications.length > 0 ? (
           filteredNotifications.map((notification) => {
             const IconComponent = getNotificationIcon(notification.type);
             const colorClasses = getNotificationColor(notification.type, notification.priority);
@@ -437,10 +431,11 @@ export const NotificationsPage: React.FC = () => {
             </p>
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* Summary */}
-      {filteredNotifications.length > 0 && (
+      {!loading && filteredNotifications.length > 0 && (
         <div className="mt-6 text-center text-sm text-gray-500">
           Showing {filteredNotifications.length} of {notifications.length} notifications
         </div>

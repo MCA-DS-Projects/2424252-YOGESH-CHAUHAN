@@ -1,20 +1,12 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
-  User, 
   Mail, 
-  Phone, 
-  MapPin, 
   Calendar, 
   Edit3, 
   Save, 
   X, 
-  Camera,
-  Shield,
-  Award,
-  BookOpen,
-  Clock,
-  TrendingUp
+  Camera
 } from 'lucide-react';
 
 export const ProfilePage: React.FC = () => {
@@ -31,12 +23,7 @@ export const ProfilePage: React.FC = () => {
     year: user?.year || '',
     semester: user?.semester || '',
     roll_number: user?.roll_number || '',
-    designation: user?.designation || '',
-    location: 'New York, NY',
-    bio: 'Passionate learner focused on AI and Machine Learning. Always eager to explore new technologies and share knowledge with the community.',
-    website: 'https://johndoe.dev',
-    linkedin: 'https://linkedin.com/in/johndoe',
-    github: 'https://github.com/johndoe'
+    designation: user?.designation || ''
   });
 
   const handleSave = async () => {
@@ -85,12 +72,7 @@ export const ProfilePage: React.FC = () => {
       year: user?.year || '',
       semester: user?.semester || '',
       roll_number: user?.roll_number || '',
-      designation: user?.designation || '',
-      location: 'New York, NY',
-      bio: 'Passionate learner focused on AI and Machine Learning. Always eager to explore new technologies and share knowledge with the community.',
-      website: 'https://johndoe.dev',
-      linkedin: 'https://linkedin.com/in/johndoe',
-      github: 'https://github.com/johndoe'
+      designation: user?.designation || ''
     });
     setProfilePic(user?.profile_pic || '');
     setIsEditing(false);
@@ -131,20 +113,6 @@ export const ProfilePage: React.FC = () => {
   const removeProfilePic = () => {
     setProfilePic('');
   };
-
-  const stats = [
-    { label: 'Courses Completed', value: '12', icon: BookOpen, color: 'text-blue-600' },
-    { label: 'Study Hours', value: '156', icon: Clock, color: 'text-green-600' },
-    { label: 'Certificates', value: '8', icon: Award, color: 'text-purple-600' },
-    { label: 'Streak Days', value: '23', icon: TrendingUp, color: 'text-orange-600' }
-  ];
-
-  const achievements = [
-    { title: 'First Course Completed', description: 'Completed your first course', date: '2024-01-15', icon: '🎓' },
-    { title: 'Week Streak', description: 'Studied for 7 consecutive days', date: '2024-01-20', icon: '🔥' },
-    { title: 'Assignment Master', description: 'Scored 100% on 5 assignments', date: '2024-01-25', icon: '🏆' },
-    { title: 'AI Enthusiast', description: 'Completed 3 AI courses', date: '2024-02-01', icon: '🤖' }
-  ];
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -220,9 +188,7 @@ export const ProfilePage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-8">
+      <div className="max-w-3xl mx-auto space-y-8">
           {/* Profile Picture Management */}
           {isEditing && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -304,7 +270,7 @@ export const ProfilePage: React.FC = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                 {isEditing ? (
@@ -474,127 +440,12 @@ export const ProfilePage: React.FC = () => {
                 </>
               )}
             </div>
-
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
-              {isEditing ? (
-                <textarea
-                  value={formData.bio}
-                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              ) : (
-                <p className="text-gray-900">{formData.bio}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>
-                {isEditing ? (
-                  <input
-                    type="url"
-                    value={formData.website}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                ) : (
-                  <a href={formData.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
-                    {formData.website}
-                  </a>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">LinkedIn</label>
-                {isEditing ? (
-                  <input
-                    type="url"
-                    value={formData.linkedin}
-                    onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                ) : (
-                  <a href={formData.linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
-                    LinkedIn Profile
-                  </a>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">GitHub</label>
-                {isEditing ? (
-                  <input
-                    type="url"
-                    value={formData.github}
-                    onChange={(e) => setFormData({ ...formData, github: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                ) : (
-                  <a href={formData.github} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
-                    GitHub Profile
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Achievements */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Recent Achievements</h2>
-            <div className="space-y-4">
-              {achievements.map((achievement, index) => (
-                <div key={index} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl">{achievement.icon}</div>
-                  <div className="flex-1">
-                    <h3 className="font-medium text-gray-900">{achievement.title}</h3>
-                    <p className="text-sm text-gray-600">{achievement.description}</p>
-                  </div>
-                  <div className="text-sm text-gray-500">{achievement.date}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-8">
-          {/* Stats */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Learning Stats</h2>
-            <div className="space-y-4">
-              {stats.map((stat, index) => (
-                <div key={index} className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg bg-gray-100 ${stat.color}`}>
-                    <stat.icon className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600">{stat.label}</p>
-                    <p className="text-xl font-semibold text-gray-900">{stat.value}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Security */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Security</h2>
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Shield className="h-5 w-5 text-green-600" />
-                  <div>
-                    <p className="font-medium text-gray-900">Two-Factor Authentication</p>
-                    <p className="text-sm text-gray-600">Enabled</p>
-                  </div>
-                </div>
-                <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                  Manage
-                </button>
-              </div>
-              
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-gray-900">Password</p>
@@ -606,27 +457,7 @@ export const ProfilePage: React.FC = () => {
               </div>
             </div>
           </div>
-
-          {/* Activity */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Recent Activity</h2>
-            <div className="space-y-3">
-              <div className="text-sm">
-                <p className="text-gray-900">Completed "Machine Learning Basics"</p>
-                <p className="text-gray-500">2 hours ago</p>
-              </div>
-              <div className="text-sm">
-                <p className="text-gray-900">Submitted assignment for Python Course</p>
-                <p className="text-gray-500">1 day ago</p>
-              </div>
-              <div className="text-sm">
-                <p className="text-gray-900">Earned "Assignment Master" badge</p>
-                <p className="text-gray-500">3 days ago</p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
-    </div>
   );
 };

@@ -5,19 +5,9 @@ import {
   User, 
   Bell, 
   Shield, 
-  Palette, 
-  Globe, 
   Download, 
   Trash2,
-  Moon,
-  Sun,
-  Monitor,
   Mail,
-  MessageSquare,
-  Calendar,
-  BookOpen,
-  Award,
-  Lock,
   Eye,
   EyeOff,
   CheckCircle,
@@ -28,8 +18,6 @@ import {
 export const SettingsPage: React.FC = () => {
   const { user, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
-  const [darkMode, setDarkMode] = useState('system');
-  const [language, setLanguage] = useState('en');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -84,8 +72,6 @@ export const SettingsPage: React.FC = () => {
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'privacy', label: 'Privacy & Security', icon: Shield },
-    { id: 'appearance', label: 'Appearance', icon: Palette },
-    { id: 'language', label: 'Language & Region', icon: Globe },
     { id: 'data', label: 'Data & Storage', icon: Download }
   ];
 
@@ -623,98 +609,6 @@ export const SettingsPage: React.FC = () => {
     </div>
   );
 
-  const renderAppearanceSettings = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Theme</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            { id: 'light', label: 'Light', icon: Sun },
-            { id: 'dark', label: 'Dark', icon: Moon },
-            { id: 'system', label: 'System', icon: Monitor }
-          ].map((theme) => (
-            <button
-              key={theme.id}
-              onClick={() => setDarkMode(theme.id)}
-              className={`p-4 border-2 rounded-lg transition-colors ${
-                darkMode === theme.id
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <theme.icon className="h-8 w-8 mx-auto mb-2 text-gray-600" />
-              <p className="font-medium text-gray-900">{theme.label}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Display</h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Font Size</label>
-            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-              <option>Small</option>
-              <option>Medium</option>
-              <option>Large</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Sidebar Position</label>
-            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-              <option>Left</option>
-              <option>Right</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderLanguageSettings = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Language</h3>
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="en">English</option>
-          <option value="es">Español</option>
-          <option value="fr">Français</option>
-          <option value="de">Deutsch</option>
-          <option value="zh">中文</option>
-          <option value="ja">日本語</option>
-        </select>
-      </div>
-
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Region</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Time Zone</label>
-            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-              <option>UTC-8 (Pacific Time)</option>
-              <option>UTC-5 (Eastern Time)</option>
-              <option>UTC+0 (GMT)</option>
-              <option>UTC+1 (Central European Time)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
-            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-              <option>MM/DD/YYYY</option>
-              <option>DD/MM/YYYY</option>
-              <option>YYYY-MM-DD</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   const renderDataSettings = () => (
     <div className="space-y-6">
       <div>
@@ -771,8 +665,6 @@ export const SettingsPage: React.FC = () => {
       case 'profile': return renderProfileSettings();
       case 'notifications': return renderNotificationSettings();
       case 'privacy': return renderPrivacySettings();
-      case 'appearance': return renderAppearanceSettings();
-      case 'language': return renderLanguageSettings();
       case 'data': return renderDataSettings();
       default: return renderProfileSettings();
     }

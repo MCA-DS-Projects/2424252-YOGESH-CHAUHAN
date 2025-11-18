@@ -9,13 +9,16 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ role = 'st
   const { googleLogin } = useAuth();
 
   const handleGoogleLogin = () => {
+    // Google login is only for students
+    const studentRole = 'student';
+    
     // Initialize Google Sign-In
     if (typeof window !== 'undefined' && (window as any).google) {
       (window as any).google.accounts.id.initialize({
         client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID',
         callback: async (response: any) => {
           try {
-            await googleLogin(response.credential, role);
+            await googleLogin(response.credential, studentRole);
           } catch (error) {
             console.error('Google login failed:', error);
           }

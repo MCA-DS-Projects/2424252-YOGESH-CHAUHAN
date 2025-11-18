@@ -65,7 +65,10 @@ export const AssignmentCreationModal: React.FC<AssignmentCreationModalProps> = (
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    console.log('Form submitted with data:', formData);
+
     if (!validateFormData()) {
+      console.log('Validation failed with errors:', errors);
       return;
     }
 
@@ -83,6 +86,7 @@ export const AssignmentCreationModal: React.FC<AssignmentCreationModalProps> = (
           max_file_size: formData.max_file_size
         };
         
+        console.log('Updating assignment with data:', updateData);
         await AssignmentAPI.updateAssignment(editingAssignment._id, updateData);
         setToast({ type: 'success', message: 'Assignment updated successfully!' });
       } else {
@@ -91,7 +95,9 @@ export const AssignmentCreationModal: React.FC<AssignmentCreationModalProps> = (
           due_date: new Date(formData.due_date).toISOString()
         };
         
-        await AssignmentAPI.createAssignment(createData);
+        console.log('Creating assignment with data:', createData);
+        const result = await AssignmentAPI.createAssignment(createData);
+        console.log('Assignment created successfully:', result);
         setToast({ type: 'success', message: 'Assignment created successfully!' });
       }
 

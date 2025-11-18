@@ -115,31 +115,102 @@ export interface AssignmentPerformance {
 export class AssignmentAPI {
   /**
    * Get all assignments for the current user (role-based)
+   * For teachers: Returns assignments from courses they created with submission counts
+   * For students: Returns assignments from enrolled courses with submission status
    */
   static async getAssignments(): Promise<Assignment[]> {
     try {
       const response = await apiClient.get<{ assignments: Assignment[] }>(
         API_ENDPOINTS.ASSIGNMENTS.BASE
       );
+      
+      // Verify response structure
+      if (!response.assignments || !Array.isArray(response.assignments)) {
+        console.error('Invalid response structure from assignments endpoint:', response);
+        throw new Error('Invalid response format from server');
+      }
+      
       return response.assignments;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch assignments:', error);
-      throw new Error('Failed to load assignments');
+      
+      // Provide user-friendly error messages
+      if (error.message?.includes('403')) {
+        throw new Error('You do not have permission to access assignments.');
+      } else if (error.message?.includes('401')) {
+        throw new Error('Your session has expired. Please log in again.');
+      } else if (error.message?.includes('Invalid response format')) {
+        throw error; // Re-throw the specific error
+      } else if (!navigator.onLine) {
+        throw new Error('No internet connection. Please check your network and try again.');
+      } else {
+        throw new Error('Failed to load assignments. Please try again later.');
+      }
     }
   }
 
   /**
    * Get a specific assignment by ID
+   * For teachers: Includes all submissions with student information
+   * For students: Includes their own submission if exists
    */
   static async getAssignmentById(assignmentId: string): Promise<Assignment> {
     try {
       const response = await apiClient.get<{ assignment: Assignment }>(
         API_ENDPOINTS.ASSIGNMENTS.BY_ID(assignmentId)
       );
+      
+      // Verify response structure
+      if (!response.assignment) {
+        console.error('Invalid response structure from assignment endpoint:', response);
+        throw new Error('Invalid response format from server');
+      }
+      
       return response.assignment;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch assignment:', error);
-      throw new Error('Failed to load assignment details');
+      
+      // Provide user-friendly error messages
+      if (error.message?.includes('404')) {
+        throw new Error('Assignment not found. It may have been deleted.');
+      } else if (error.message?.includes('403')) {
+        throw new Error('You do not have permission to access this assignment.');
+      } else if (error.message?.includes('401')) {
+        throw new Error('Your session has expired. Please log in again.');
+      } else if (error.message?.includes('Invalid response format')) {
+        throw error; // Re-throw the specific error
+      } else if (!navigator.onLine) {
+        throw new Error('No internet connection. Please check your network and try again.');
+      } else {
+        throw new Error('Failed to load assignment details. Please try again later.');
+      }
+    }
+  }
+
+  /**
+   * Get assignment details with all submissions (teacher/admin only)
+   * This is an alias for getAssignmentById but more explicit about fetching submissions
+   * Handles the case where assignment has no submissions gracefully
+   */
+  static async getAssignmentDetails(assignmentId: string): Promise<Assignment> {
+    try {
+      const assignment = await this.getAssignmentById(assignmentId);
+      
+      // Ensure submissions array exists even if empty
+      if (!assignment.submissions) {
+        assignment.submissions = [];
+      }
+      
+      return assignment;
+    } catch (error: any) {
+      console.error('Failed to fetch assignment details:', error);
+      
+      // Re-throw with context
+      if (error.message) {
+        throw error;
+      } else {
+        throw new Error('Failed to load assignment details with submissions.');
+      }
     }
   }
 
@@ -176,11 +247,13 @@ export class AssignmentAPI {
   }
 
   /**
-   * Delete an assignment (deactivate)
+   * Delete an assignment
    */
   static async deleteAssignment(assignmentId: string): Promise<void> {
     try {
-      await this.updateAssignment(assignmentId, { is_active: false });
+      await apiClient.delete<{ message: string }>(
+        API_ENDPOINTS.ASSIGNMENTS.BY_ID(assignmentId)
+      );
     } catch (error) {
       console.error('Failed to delete assignment:', error);
       throw new Error('Failed to delete assignment');
@@ -208,13 +281,39 @@ export class AssignmentAPI {
    */
   static async gradeSubmission(submissionId: string, gradeData: GradeSubmissionRequest): Promise<void> {
     try {
+      // Validate grade data before sending
+      if (gradeData.grade === undefined || gradeData.grade === null) {
+        throw new Error('Grade is required');
+      }
+      
+      if (gradeData.grade < 0) {
+        throw new Error('Grade cannot be negative');
+      }
+      
       await apiClient.post<{ message: string }>(
         API_ENDPOINTS.ASSIGNMENTS.GRADE(submissionId),
         gradeData
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to grade submission:', error);
-      throw new Error('Failed to grade submission');
+      
+      // Provide user-friendly error messages
+      if (error.message?.includes('Grade is required') || error.message?.includes('Grade cannot be negative')) {
+        throw error; // Re-throw validation errors
+      } else if (error.message?.includes('404')) {
+        throw new Error('Submission not found. It may have been deleted.');
+      } else if (error.message?.includes('403')) {
+        throw new Error('You do not have permission to grade this submission.');
+      } else if (error.message?.includes('401')) {
+        throw new Error('Your session has expired. Please log in again.');
+      } else if (error.message?.includes('400')) {
+        // Backend validation error
+        throw new Error('Invalid grade value. Please check the grade is within the allowed range.');
+      } else if (!navigator.onLine) {
+        throw new Error('No internet connection. Please check your network and try again.');
+      } else {
+        throw new Error('Failed to submit grade. Please try again later.');
+      }
     }
   }  /**
  

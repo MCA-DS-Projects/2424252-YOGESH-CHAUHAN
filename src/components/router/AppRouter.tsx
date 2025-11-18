@@ -29,6 +29,8 @@ import { AssignmentTest } from '../test/AssignmentTest';
 import { TeacherAssignmentView } from '../assignments/TeacherAssignmentView';
 import { QuickTest } from '../test/QuickTest';
 import { NavigationTest } from '../../test/NavigationTest';
+import { AssignmentManagement } from '../../pages/AssignmentManagement';
+import { ErrorBoundary } from '../common';
 
 export const AppRouter: React.FC = () => {
   const { user } = useAuth();
@@ -76,6 +78,14 @@ export const AppRouter: React.FC = () => {
       }
       
       return <CourseDetailPage courseId={courseId} />;
+    }
+
+    if (currentPath.startsWith('/assignments/detail')) {
+      const pathParts = currentPath.split('/');
+      const pathId = pathParts[3];
+      const queryId = new URLSearchParams(window.location.search).get('id');
+      const assignmentId = pathId || queryId || undefined;
+      return <AssignmentDetailPage assignmentId={assignmentId} />;
     }
 
     switch (currentPath) {
@@ -131,12 +141,18 @@ export const AppRouter: React.FC = () => {
         );
       case '/schedule':
         return <SchedulePage />;
-      case '/assignments/detail':
-        return <AssignmentDetailPage />;
       case '/assignments/teacher':
         return (
           <RoleBasedRoute allowedRoles={['teacher', 'instructor', 'super_admin', 'admin']}>
             <TeacherAssignmentView />
+          </RoleBasedRoute>
+        );
+      case '/assignments/manage':
+        return (
+          <RoleBasedRoute allowedRoles={['teacher', 'instructor', 'super_admin', 'admin']}>
+            <ErrorBoundary>
+              <AssignmentManagement />
+            </ErrorBoundary>
           </RoleBasedRoute>
         );
       case '/analytics/learners':

@@ -66,6 +66,7 @@ export const API_ENDPOINTS = {
 
   // Analytics
   ANALYTICS: {
+    BASE: `${API_BASE_URL}/analytics`,
     DASHBOARD: `${API_BASE_URL}/analytics/dashboard`,
     COURSE: (id: string) => `${API_BASE_URL}/analytics/course/${id}`,
     STUDENT: (id: string) => `${API_BASE_URL}/analytics/student/${id}`,
@@ -98,6 +99,23 @@ export const API_ENDPOINTS = {
     MARK_READ: (id: string) => `${API_BASE_URL}/notifications/${id}/read`,
     MARK_ALL_READ: `${API_BASE_URL}/notifications/read-all`,
     UNREAD_COUNT: `${API_BASE_URL}/notifications/unread-count`,
+  },
+
+  // Discussions
+  DISCUSSIONS: {
+    BASE: `${API_BASE_URL}/discussions`,
+    BY_ID: (id: string) => `${API_BASE_URL}/discussions/${id}`,
+  },
+
+  // Schedule
+  SCHEDULE: {
+    EVENTS: `${API_BASE_URL}/schedule/events`,
+    EVENT_BY_ID: (id: string) => `${API_BASE_URL}/schedule/events/${id}`,
+  },
+
+  // Achievements
+  ACHIEVEMENTS: {
+    BASE: `${API_BASE_URL}/achievements`,
   },
 
   // Health check

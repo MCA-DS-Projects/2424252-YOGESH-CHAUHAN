@@ -24,7 +24,7 @@ interface GradingModalProps {
   onClose: () => void;
   submission: Submission | null;
   maxPoints: number;
-  onGradeSubmitted: () => void;
+  onGradeSubmitted: (submissionId?: string, grade?: number, feedback?: string) => void;
 }
 
 export const GradingModal: React.FC<GradingModalProps> = ({
@@ -39,6 +39,10 @@ export const GradingModal: React.FC<GradingModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Refs for focus management
+  const modalRef = React.useRef<HTMLDivElement>(null);
+  const previousActiveElementRef = React.useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (submission) {
@@ -47,6 +51,71 @@ export const GradingModal: React.FC<GradingModalProps> = ({
       setErrors({});
     }
   }, [submission]);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen && !submitting) {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscapeKey);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [isOpen, submitting]);
+
+  // Focus management: Save previous focus, trap focus within modal
+  useEffect(() => {
+    if (isOpen) {
+      // Save the currently focused element
+      previousActiveElementRef.current = document.activeElement as HTMLElement;
+      
+      // Focus will be set to the grade input via autoFocus attribute
+      
+      // Trap focus within modal
+      const handleTabKey = (event: KeyboardEvent) => {
+        if (event.key !== 'Tab' || !modalRef.current) return;
+
+        const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (event.shiftKey) {
+          // Shift + Tab: moving backwards
+          if (document.activeElement === firstElement) {
+            event.preventDefault();
+            lastElement?.focus();
+          }
+        } else {
+          // Tab: moving forwards
+          if (document.activeElement === lastElement) {
+            event.preventDefault();
+            firstElement?.focus();
+          }
+        }
+      };
+
+      document.addEventListener('keydown', handleTabKey);
+
+      return () => {
+        document.removeEventListener('keydown', handleTabKey);
+      };
+    } else {
+      // Return focus to the element that opened the modal
+      if (previousActiveElementRef.current) {
+        previousActiveElementRef.current.focus();
+        previousActiveElementRef.current = null;
+      }
+    }
+  }, [isOpen]);
 
   const validateFormData = (): boolean => {
     const validation = validateForm(
@@ -60,29 +129,60 @@ export const GradingModal: React.FC<GradingModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!submission || !validateFormData()) {
+    if (!submission || !validateFormData() || submitting) {
       return;
     }
 
+    // Store original values for potential revert
+    const originalGrade = submission.grade;
+    const originalFeedback = submission.feedback;
+
+    // Parse and prepare the new grade data
+    const newGrade = parseFloat(grade);
+    const newFeedback = feedback.trim();
+
     setSubmitting(true);
+
     try {
+      // Optimistic UI update - immediately notify parent to update UI
+      // This provides instant feedback before API confirmation
+      onGradeSubmitted(submission._id, newGrade, newFeedback);
+
+      // Submit grade to backend API
       await AssignmentAPI.gradeSubmission(submission._id, {
-        grade: parseFloat(grade),
-        feedback: feedback.trim()
+        grade: newGrade,
+        feedback: newFeedback
       });
 
+      // API call succeeded - show success toast
       setToast({ type: 'success', message: 'Grade submitted successfully!' });
       
+      // Wait a moment to show success message, then close modal
       setTimeout(() => {
-        onGradeSubmitted();
         handleClose();
       }, 1500);
+
     } catch (error) {
       console.error('Error grading submission:', error);
+      
+      // Revert UI update on failure by refreshing data from server
+      // Call onGradeSubmitted without parameters to trigger a refresh
+      onGradeSubmitted();
+      
+      // Show error toast
       setToast({ 
         type: 'error', 
-        message: error instanceof Error ? error.message : 'Failed to submit grade' 
+        message: error instanceof Error ? error.message : 'Failed to submit grade. Please try again.' 
       });
+
+      // Reset form to original values
+      if (originalGrade !== undefined) {
+        setGrade(originalGrade.toString());
+      }
+      if (originalFeedback) {
+        setFeedback(originalFeedback);
+      }
+
     } finally {
       setSubmitting(false);
     }
@@ -124,17 +224,33 @@ export const GradingModal: React.FC<GradingModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        onClick={(e) => {
+          // Close modal when clicking on overlay (not on modal content)
+          if (e.target === e.currentTarget && !submitting) {
+            handleClose();
+          }
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+      >
+        <div 
+          ref={modalRef}
+          className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Grade Submission</h2>
+              <h2 id="modal-title" className="text-2xl font-bold text-gray-900">Grade Submission</h2>
               <p className="text-gray-600 mt-1">{submission.student_name}</p>
             </div>
             <button
               onClick={handleClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
               disabled={submitting}
+              aria-label="Close grading modal"
             >
               <X className="h-6 w-6" />
             </button>
@@ -233,10 +349,11 @@ export const GradingModal: React.FC<GradingModalProps> = ({
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {/* Grade Input */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="grade-input" className="block text-sm font-medium text-gray-700 mb-2">
                       Grade (out of {maxPoints}) *
                     </label>
                     <input
+                      id="grade-input"
                       type="number"
                       value={grade}
                       onChange={(e) => setGrade(e.target.value)}
@@ -248,6 +365,7 @@ export const GradingModal: React.FC<GradingModalProps> = ({
                       }`}
                       placeholder={`0-${maxPoints}`}
                       disabled={submitting}
+                      autoFocus
                     />
                     {errors.grade && (
                       <p className="mt-1 text-sm text-red-600">{errors.grade}</p>
@@ -276,16 +394,23 @@ export const GradingModal: React.FC<GradingModalProps> = ({
 
                   {/* Feedback Input */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="feedback-input" className="block text-sm font-medium text-gray-700 mb-2">
                       Feedback
                     </label>
                     <textarea
+                      id="feedback-input"
                       value={feedback}
                       onChange={(e) => setFeedback(e.target.value)}
                       rows={6}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                       placeholder="Provide constructive feedback to help the student improve..."
                       disabled={submitting}
+                      onKeyDown={(e) => {
+                        // Allow Ctrl+Enter or Cmd+Enter to submit form
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !submitting && grade) {
+                          handleSubmit(e as any);
+                        }
+                      }}
                     />
                     <p className="mt-1 text-xs text-gray-500">
                       {feedback.length} characters

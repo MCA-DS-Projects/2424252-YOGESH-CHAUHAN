@@ -14,20 +14,20 @@ interface SidebarItem {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   href: string;
-  color?: string;
+  badge?: number;
 }
 
 export const SuperAdminSidebar: React.FC = () => {
   const { sidebarOpen, setSidebarOpen } = useLMS();
   const { user } = useAuth();
+  const [isMobile, setIsMobile] = React.useState(false);
+  const [currentPath, setCurrentPath] = React.useState(window.location.pathname);
 
   const navigationItems: SidebarItem[] = [
-    { icon: Home, label: 'Dashboard', href: '/dashboard', color: 'purple' },
-    { icon: Users, label: 'User Management', href: '/admin/users', color: 'blue' },
-    { icon: Settings, label: 'Settings', href: '/settings', color: 'gray' }
+    { icon: Home, label: 'Dashboard', href: '/dashboard' },
+    { icon: Users, label: 'User Management', href: '/admin/users' },
+    { icon: Settings, label: 'Settings', href: '/settings' }
   ];
-
-  const [isMobile, setIsMobile] = React.useState(false);
 
   // Detect mobile screen
   React.useEffect(() => {
@@ -39,9 +39,37 @@ export const SuperAdminSidebar: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const handleNavigation = (e: React.MouseEvent<HTMLButtonElement>, href: string) => {
+  // Track current path for active state highlighting
+  React.useEffect(() => {
+    const handlePathChange = () => {
+      setCurrentPath(window.location.pathname);
+    };
+
+    // Listen for popstate events (back/forward navigation)
+    window.addEventListener('popstate', handlePathChange);
+    
+    // Also listen for custom navigation events
+    window.addEventListener('navigation', handlePathChange);
+
+    return () => {
+      window.removeEventListener('popstate', handlePathChange);
+      window.removeEventListener('navigation', handlePathChange);
+    };
+  }, []);
+
+  const handleNavigation = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     e.preventDefault();
+    
+    // Update current path immediately for responsive UI
+    setCurrentPath(href);
+    
+    // Update browser history
     window.history.pushState({}, '', href);
+    
+    // Dispatch custom navigation event to trigger router update
+    window.dispatchEvent(new CustomEvent('navigation'));
+    
+    // Also dispatch popstate for compatibility
     window.dispatchEvent(new PopStateEvent('popstate'));
     
     // Close sidebar on mobile after navigation
@@ -50,12 +78,19 @@ export const SuperAdminSidebar: React.FC = () => {
     }
   };
 
-  const getHoverColor = (color?: string) => {
-    switch (color) {
-      case 'blue': return 'hover:bg-blue-50 hover:text-blue-600';
-      case 'purple': return 'hover:bg-purple-50 hover:text-purple-600';
-      default: return 'hover:bg-gray-50 hover:text-gray-600';
+  // Helper function to check if a path is active
+  const isActivePath = (href: string): boolean => {
+    // Exact match for most routes
+    if (currentPath === href) {
+      return true;
     }
+    
+    // Special handling for admin routes
+    if (href === '/admin/users' && currentPath.startsWith('/admin/users')) {
+      return true;
+    }
+    
+    return false;
   };
 
   return (
@@ -101,19 +136,37 @@ export const SuperAdminSidebar: React.FC = () => {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-2 sm:px-4 py-4 sm:py-6 space-y-1 overflow-y-auto">
-            {navigationItems.map((item, index) => (
-              <button
-                key={index}
-                onClick={(e) => handleNavigation(e, item.href)}
-                className={`w-full flex items-center gap-3 px-2 sm:px-3 py-2.5 sm:py-3 text-gray-700 rounded-lg transition-all duration-200 group text-sm ${getHoverColor(item.color)}`}
-              >
-                <item.icon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                {(sidebarOpen || isMobile) && (
-                  <span className="font-medium">{item.label}</span>
-                )}
-              </button>
-            ))}
+          <nav className="flex-1 px-2 sm:px-4 py-4 sm:py-6 overflow-y-auto">
+            <div className="space-y-2">
+              {navigationItems.map((item, index) => (
+                <a
+                  key={index}
+                  href={item.href}
+                  onClick={(e) => handleNavigation(e, item.href)}
+                  className={`flex items-center gap-3 px-2 sm:px-3 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg transition-all duration-200 ease-in-out group relative ${
+                    isActivePath(item.href)
+                      ? 'bg-purple-50 text-purple-600 shadow-sm border-l-4 border-purple-600 font-semibold'
+                      : 'text-gray-700 hover:bg-purple-50 hover:text-purple-600 hover:shadow-sm hover:translate-x-1'
+                  }`}
+                >
+                  <item.icon className={`h-5 w-5 flex-shrink-0 transition-all duration-200 ease-in-out ${
+                    isActivePath(item.href) ? 'text-purple-600' : 'text-gray-500 group-hover:text-purple-600 group-hover:scale-110'
+                  }`} />
+                  {(sidebarOpen || isMobile) && (
+                    <>
+                      <span className={`font-medium transition-colors duration-200 ${
+                        isActivePath(item.href) ? 'text-purple-600' : ''
+                      }`}>{item.label}</span>
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 sm:py-1 rounded-full min-w-[20px] text-center font-semibold shadow-sm">
+                          {item.badge > 9 ? '9+' : item.badge}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </a>
+              ))}
+            </div>
           </nav>
 
           {/* User Info */}

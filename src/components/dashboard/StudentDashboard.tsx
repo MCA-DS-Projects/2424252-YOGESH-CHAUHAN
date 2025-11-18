@@ -290,7 +290,11 @@ export const StudentDashboard: React.FC = () => {
           </div>
           <div className="space-y-3 sm:space-y-4">
             {coursesWithProgress.slice(0, 3).map((course) => (
-              <div key={course.id} className="bg-white border border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-6 hover:shadow-md transition-shadow">
+              <div 
+                key={course.id} 
+                className="bg-white border border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-6 hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => window.location.href = `/course-detail?id=${course.id}`}
+              >
                 <div className="flex items-start justify-between mb-3 sm:mb-4">
                   <div className="flex-1 pr-2">
                     <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 sm:mb-2">{course.title}</h3>
@@ -337,7 +341,13 @@ export const StudentDashboard: React.FC = () => {
                       {course.progress > 80 ? 'Almost done!' : course.progress > 50 ? 'Good progress' : 'Just started'}
                     </span>
                   </div>
-                  <button className="bg-blue-600 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.location.href = `/course-detail?id=${course.id}`;
+                    }}
+                    className="bg-blue-600 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+                  >
                     <Play className="h-3 w-3 sm:h-4 sm:w-4" />
                     <span className="hidden sm:inline">Continue</span>
                     <span className="sm:hidden">Go</span>

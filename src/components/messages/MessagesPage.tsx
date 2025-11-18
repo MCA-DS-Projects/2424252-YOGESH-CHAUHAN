@@ -31,96 +31,18 @@ interface Conversation {
 }
 
 export const MessagesPage: React.FC = () => {
-  const [selectedConversation, setSelectedConversation] = useState<string | null>('1');
+  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [newMessage, setNewMessage] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const [conversations] = useState<Conversation[]>([
-    {
-      id: '1',
-      participants: [
-        { id: '2', name: 'Dr. Sarah Johnson', role: 'Instructor', online: true },
-        { id: '1', name: 'You', role: 'Student', online: true }
-      ],
-      lastMessage: {
-        id: '1',
-        senderId: '2',
-        senderName: 'Dr. Sarah Johnson',
-        content: 'Great question about linear regression! Let me explain...',
-        timestamp: '2024-02-10T14:30:00Z',
-        read: false
-      },
-      unreadCount: 2
-    },
-    {
-      id: '2',
-      participants: [
-        { id: '3', name: 'Study Group - ML', role: 'Group', online: false },
-        { id: '1', name: 'You', role: 'Student', online: true }
-      ],
-      lastMessage: {
-        id: '2',
-        senderId: '4',
-        senderName: 'Alice Chen',
-        content: 'Anyone want to review for the exam tomorrow?',
-        timestamp: '2024-02-10T12:15:00Z',
-        read: true
-      },
-      unreadCount: 0
-    }
-  ]);
+  // TODO: Replace with API call to fetch conversations from backend
+  const [conversations] = useState<Conversation[]>([]);
 
-
-
-  const [messages, setMessages] = useState<{ [conversationId: string]: Message[] }>({
-    '1': [
-      {
-        id: '1',
-        senderId: '1',
-        senderName: 'You',
-        content: 'Hi Dr. Johnson, I have a question about the linear regression assignment.',
-        timestamp: '2024-02-10T13:00:00Z',
-        read: true
-      },
-      {
-        id: '2',
-        senderId: '2',
-        senderName: 'Dr. Sarah Johnson',
-        content: 'Great question about linear regression! Let me explain the concept step by step. Linear regression is a fundamental algorithm in machine learning that helps us find the best line through our data points.',
-        timestamp: '2024-02-10T14:30:00Z',
-        read: false
-      },
-      {
-        id: '3',
-        senderId: '2',
-        senderName: 'Dr. Sarah Johnson',
-        content: 'The key is understanding how we minimize the cost function. Would you like me to share some additional resources?',
-        timestamp: '2024-02-10T14:32:00Z',
-        read: false
-      }
-    ],
-    '2': [
-      {
-        id: '4',
-        senderId: '4',
-        senderName: 'Alice Chen',
-        content: 'Anyone want to review for the exam tomorrow?',
-        timestamp: '2024-02-10T12:15:00Z',
-        read: true
-      },
-      {
-        id: '5',
-        senderId: '1',
-        senderName: 'You',
-        content: 'Yes! I could use some help with the neural networks section.',
-        timestamp: '2024-02-10T12:20:00Z',
-        read: true
-      }
-    ]
-  });
+  // TODO: Replace with API call to fetch messages from backend
+  const [messages, setMessages] = useState<{ [conversationId: string]: Message[] }>({});
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -205,13 +127,22 @@ export const MessagesPage: React.FC = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {conversations
-            .filter(conversation => {
-              const otherParticipant = conversation.participants.find(p => p.name !== 'You');
-              return otherParticipant?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                     conversation.lastMessage.content.toLowerCase().includes(searchTerm.toLowerCase());
-            })
-            .map((conversation) => {
+          {conversations.length === 0 ? (
+            <div className="flex items-center justify-center h-full p-8">
+              <div className="text-center">
+                <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No conversations yet</h3>
+                <p className="text-gray-600 text-sm">Start a conversation with your instructors or classmates</p>
+              </div>
+            </div>
+          ) : (
+            conversations
+              .filter(conversation => {
+                const otherParticipant = conversation.participants.find(p => p.name !== 'You');
+                return otherParticipant?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                       conversation.lastMessage.content.toLowerCase().includes(searchTerm.toLowerCase());
+              })
+              .map((conversation) => {
             const otherParticipant = conversation.participants.find(p => p.name !== 'You');
             
             return (
@@ -256,7 +187,8 @@ export const MessagesPage: React.FC = () => {
                 </div>
               </button>
             );
-          })}
+          })
+          )}
         </div>
       </div>
 

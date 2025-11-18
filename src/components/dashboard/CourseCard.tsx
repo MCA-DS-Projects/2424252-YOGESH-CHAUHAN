@@ -66,6 +66,11 @@ export const CourseCard: React.FC<CourseCardProps> = ({ course, onClick, viewMod
             <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2 flex-1">
               {course.title}
             </h3>
+            {course.is_active === false && (
+              <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                Archived
+              </span>
+            )}
             {isTeacher && (
               <div onClick={(e) => e.stopPropagation()}>
                 <CourseManagementActions

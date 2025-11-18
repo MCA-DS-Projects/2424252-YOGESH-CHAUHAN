@@ -3,6 +3,7 @@ import { StudentSidebar } from './StudentSidebar';
 import { TeacherSidebar } from './TeacherSidebar';
 import { SuperAdminSidebar } from './SuperAdminSidebar';
 import { Header } from './Header';
+import { Footer } from './Footer';
 import { useLMS } from '../../contexts/LMSContext';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -41,15 +42,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {renderSidebar()}
-      <div className={`transition-all duration-300 ${
-        sidebarOpen ? 'lg:ml-64' : 'lg:ml-16'
+      <div className={`flex flex-col flex-1 transition-all duration-300 ease-in-out ${
+        isAuthenticated && user ? (sidebarOpen ? 'lg:ml-64' : 'lg:ml-16') : ''
       }`}>
         <Header />
-        <main className="min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-72px)] md:min-h-[calc(100vh-80px)]">
+        <main className="flex-1 transition-all duration-300 ease-in-out">
           {children}
         </main>
+        <Footer />
       </div>
     </div>
   );

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { getAuthToken } from '../../utils/tokenHelper';
-import { assignmentsAPI } from '../../config/api';
 import { AssignmentAPI, Assignment as AssignmentType } from '../../services/assignmentAPI';
 import { AssignmentCreationModal } from './AssignmentCreationModal';
 import { GradingModal } from './GradingModal';
@@ -117,8 +116,8 @@ export const TeacherAssignmentView: React.FC = () => {
 
   const fetchAssignmentDetails = async (assignmentId: string) => {
     try {
-      const response = await assignmentsAPI.getById(assignmentId);
-      setSelectedAssignment(response.data.assignment);
+      const assignment = await AssignmentAPI.getAssignmentById(assignmentId);
+      setSelectedAssignment(assignment);
     } catch (error) {
       console.error('Error fetching assignment details:', error);
       setToast({ type: 'error', message: 'Failed to load assignment details' });

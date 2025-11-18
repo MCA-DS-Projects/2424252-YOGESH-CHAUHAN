@@ -56,11 +56,11 @@ export const StudentSidebar: React.FC = () => {
     window.addEventListener('popstate', handlePathChange);
     
     // Also listen for custom navigation events
-    window.addEventListener('navigation', handlePathChange);
+    window.addEventListener('pushstate', handlePathChange);
 
     return () => {
       window.removeEventListener('popstate', handlePathChange);
-      window.removeEventListener('navigation', handlePathChange);
+      window.removeEventListener('pushstate', handlePathChange);
     };
   }, []);
 
@@ -118,13 +118,43 @@ export const StudentSidebar: React.FC = () => {
 
   const handleNavigation = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     e.preventDefault();
+    
+    // Update current path immediately for responsive UI
+    setCurrentPath(href);
+    
+    // Update browser history
     window.history.pushState({}, '', href);
+    
+    // Dispatch custom navigation event to trigger router update
+    window.dispatchEvent(new CustomEvent('navigation'));
+    
+    // Also dispatch popstate for compatibility
     window.dispatchEvent(new PopStateEvent('popstate'));
     
     // Close sidebar on mobile after navigation
     if (isMobile) {
       setSidebarOpen(false);
     }
+  };
+
+  // Helper function to check if a path is active
+  const isActivePath = (href: string): boolean => {
+    // Exact match for most routes
+    if (currentPath === href) {
+      return true;
+    }
+    
+    // Special handling for course routes
+    if (href === '/courses' && currentPath.startsWith('/courses/') && currentPath !== '/courses/create') {
+      return true;
+    }
+    
+    // Special handling for assignment routes
+    if (href === '/assignments' && currentPath.startsWith('/assignments/')) {
+      return true;
+    }
+    
+    return false;
   };
 
   return (
@@ -145,7 +175,9 @@ export const StudentSidebar: React.FC = () => {
       }`}>
         <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200">
+        <div className={`flex items-center border-b border-gray-200 p-3 sm:p-4 ${
+          sidebarOpen || isMobile ? 'justify-between' : 'justify-center'
+        }`}>
           {(sidebarOpen || isMobile) && (
             <div className="flex items-center gap-2">
               <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-1.5 sm:p-2 rounded-lg">
@@ -157,16 +189,19 @@ export const StudentSidebar: React.FC = () => {
               </div>
             </div>
           )}
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            {sidebarOpen ? (
-              <ChevronLeft className="h-5 w-5 text-gray-600" />
-            ) : (
-              <ChevronRight className="h-5 w-5 text-gray-600" />
-            )}
-          </button>
+          {!isMobile && (
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              {sidebarOpen ? (
+                <ChevronLeft className="h-5 w-5 text-gray-600" />
+              ) : (
+                <ChevronRight className="h-5 w-5 text-gray-600" />
+              )}
+            </button>
+          )}
         </div>
 
         {/* Navigation */}
@@ -180,18 +215,22 @@ export const StudentSidebar: React.FC = () => {
                     key={itemIndex}
                     href={item.href}
                     onClick={(e) => handleNavigation(e, item.href)}
-                    className={`flex items-center gap-3 px-2 sm:px-3 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg transition-all duration-200 group ${
-                      window.location.pathname === item.href
-                        ? 'bg-blue-50 text-blue-600'
-                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                    className={`flex items-center gap-3 px-2 sm:px-3 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg transition-all duration-200 ease-in-out group relative ${
+                      isActivePath(item.href)
+                        ? 'bg-blue-50 text-blue-600 shadow-sm border-l-4 border-blue-600 font-semibold'
+                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600 hover:shadow-sm hover:translate-x-1'
                     }`}
                   >
-                    <item.icon className="h-5 w-5 flex-shrink-0" />
+                    <item.icon className={`h-5 w-5 flex-shrink-0 transition-all duration-200 ease-in-out ${
+                      isActivePath(item.href) ? 'text-blue-600' : 'text-gray-500 group-hover:text-blue-600 group-hover:scale-110'
+                    }`} />
                     {(sidebarOpen || isMobile) && (
                       <>
-                        <span className="font-medium">{item.label}</span>
-                        {item.badge && item.badge > 0 && (
-                          <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 sm:py-1 rounded-full min-w-[20px] text-center">
+                        <span className={`font-medium transition-colors duration-200 ${
+                          isActivePath(item.href) ? 'text-blue-600' : ''
+                        }`}>{item.label}</span>
+                        {item.badge !== undefined && item.badge > 0 && (
+                          <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 sm:py-1 rounded-full min-w-[20px] text-center font-semibold shadow-sm">
                             {item.badge > 9 ? '9+' : item.badge}
                           </span>
                         )}

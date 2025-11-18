@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { StudentDashboard } from './StudentDashboard';
 import { TeacherDashboard } from './TeacherDashboard';
 import { SuperAdminDashboard } from './SuperAdminDashboard';
+import { ErrorBoundary } from '../common';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -10,12 +11,28 @@ export const Dashboard: React.FC = () => {
   // Route to appropriate dashboard based on user role
   switch (user?.role) {
     case 'student':
-      return <StudentDashboard />;
+      return (
+        <ErrorBoundary>
+          <StudentDashboard />
+        </ErrorBoundary>
+      );
     case 'teacher':
-      return <TeacherDashboard />;
+      return (
+        <ErrorBoundary>
+          <TeacherDashboard />
+        </ErrorBoundary>
+      );
     case 'super_admin':
-      return <SuperAdminDashboard />;
+      return (
+        <ErrorBoundary>
+          <SuperAdminDashboard />
+        </ErrorBoundary>
+      );
     default:
-      return <StudentDashboard />; // Default fallback
+      return (
+        <ErrorBoundary>
+          <StudentDashboard />
+        </ErrorBoundary>
+      ); // Default fallback
   }
 };

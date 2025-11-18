@@ -176,11 +176,13 @@ export const assignmentValidationRules = {
       }
       const dueDate = new Date(value);
       const now = new Date();
+      // Allow dates that are at least 1 minute in the future
+      const oneMinuteFromNow = new Date(now.getTime() + 60000);
       if (isNaN(dueDate.getTime())) {
         return { isValid: false, error: 'Invalid date format' };
       }
-      if (dueDate <= now) {
-        return { isValid: false, error: 'Due date must be in the future' };
+      if (dueDate < oneMinuteFromNow) {
+        return { isValid: false, error: 'Due date must be at least 1 minute in the future' };
       }
       return { isValid: true };
     }

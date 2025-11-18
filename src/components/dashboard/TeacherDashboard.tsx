@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLMS } from '../../contexts/LMSContext';
 import { StatsCard } from './StatsCard';
@@ -6,6 +6,14 @@ import LearnerInsights from './LearnerInsights';
 import TeacherAPI from '../../services/teacherAPI';
 import { AssignmentAPI } from '../../services/assignmentAPI';
 import { TeacherStats, TeacherCourse } from '../../types/teacher';
+import { Toast } from '../common/Toast';
+import { apiCache, CACHE_KEYS } from '../../utils/cache';
+import {
+  StatsCardSkeleton,
+  CourseCardSkeleton,
+  AssignmentItemSkeleton,
+  WelcomeSectionSkeleton
+} from '../common';
 import {
   BookOpen,
   Users,
@@ -20,12 +28,11 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-interface Assignment {
+interface PendingAssignment {
   _id: string;
   title: string;
   course_title: string;
   due_date: string;
-  status: string;
   submission_count?: number;
 }
 
@@ -36,10 +43,37 @@ export const TeacherDashboard: React.FC = () => {
   // State for real data
   const [teacherStats, setTeacherStats] = useState<TeacherStats | null>(null);
   const [courses, setCourses] = useState<TeacherCourse[]>([]);
-  const [pendingAssignments, setPendingAssignments] = useState<Assignment[]>([]);
+  const [pendingAssignments, setPendingAssignments] = useState<PendingAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [partialError, setPartialError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    show: boolean;
+    type: 'success' | 'error' | 'warning' | 'info';
+    message: string;
+  }>({
+    show: false,
+    type: 'info',
+    message: ''
+  });
+
+  // Helper function to show toast
+  const showToast = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
+    setToast({
+      show: true,
+      type,
+      message
+    });
+  };
+
+  // Helper function to hide toast
+  const hideToast = () => {
+    setToast(prev => ({
+      ...prev,
+      show: false
+    }));
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -48,35 +82,86 @@ export const TeacherDashboard: React.FC = () => {
     return 'Good evening';
   };
 
-  // Fetch all dashboard data
+  // Fetch all dashboard data with partial success handling
   const fetchDashboardData = async (isRefresh = false) => {
     try {
       if (isRefresh) {
         setRefreshing(true);
+        // Invalidate cache on manual refresh
+        apiCache.invalidate(CACHE_KEYS.TEACHER_DASHBOARD_STATS);
+        apiCache.invalidate(CACHE_KEYS.TEACHER_COURSES);
+        apiCache.invalidate(CACHE_KEYS.TEACHER_ASSIGNMENTS);
       } else {
         setLoading(true);
       }
       setError(null);
+      setPartialError(null);
 
-      // Fetch data in parallel
-      const [statsData, coursesData, assignmentsData] = await Promise.all([
-        TeacherAPI.getDashboardStats(),
-        TeacherAPI.getCourses(),
-        AssignmentAPI.getAssignments()
+      // Fetch data in parallel with individual error handling and caching
+      const results = await Promise.allSettled([
+        apiCache.getOrFetch(CACHE_KEYS.TEACHER_DASHBOARD_STATS, () => TeacherAPI.getDashboardStats()),
+        apiCache.getOrFetch(CACHE_KEYS.TEACHER_COURSES, () => TeacherAPI.getCourses()),
+        apiCache.getOrFetch(CACHE_KEYS.TEACHER_ASSIGNMENTS, () => AssignmentAPI.getAssignments())
       ]);
 
-      setTeacherStats(statsData);
-      setCourses(coursesData);
-      
-      // Filter pending assignments (submitted but not graded)
-      const pending = assignmentsData
-        .filter((a: Assignment) => a.submission_count && a.submission_count > 0)
-        .slice(0, 5);
-      setPendingAssignments(pending);
+      const [statsResult, coursesResult, assignmentsResult] = results;
+      const errors: string[] = [];
+
+      // Handle stats data
+      if (statsResult.status === 'fulfilled') {
+        setTeacherStats(statsResult.value);
+      } else {
+        console.error('Failed to fetch stats:', statsResult.reason);
+        errors.push('statistics');
+        setTeacherStats(null);
+      }
+
+      // Handle courses data
+      if (coursesResult.status === 'fulfilled') {
+        setCourses(coursesResult.value);
+      } else {
+        console.error('Failed to fetch courses:', coursesResult.reason);
+        errors.push('courses');
+        setCourses([]);
+      }
+
+      // Handle assignments data
+      if (assignmentsResult.status === 'fulfilled') {
+        const pending = assignmentsResult.value
+          .filter(a => a.submission_count && a.submission_count > 0)
+          .map(a => ({
+            _id: a._id,
+            title: a.title,
+            course_title: a.course_title || '',
+            due_date: a.due_date,
+            submission_count: a.submission_count
+          }));
+        setPendingAssignments(pending);
+      } else {
+        console.error('Failed to fetch assignments:', assignmentsResult.reason);
+        errors.push('assignments');
+        setPendingAssignments([]);
+      }
+
+      // If all requests failed, show full error
+      if (errors.length === 3) {
+        const errorMessage = 'Failed to load dashboard data. Please try again.';
+        setError(errorMessage);
+        showToast('error', errorMessage);
+      } else if (errors.length > 0) {
+        // Show partial error message
+        const partialErrorMessage = `Some data could not be loaded: ${errors.join(', ')}`;
+        setPartialError(partialErrorMessage);
+      } else if (isRefresh) {
+        // Show success toast on successful refresh
+        showToast('success', 'Dashboard data refreshed successfully');
+      }
 
     } catch (err) {
-      console.error('Failed to fetch dashboard data:', err);
-      setError('Failed to load dashboard data. Please try again.');
+      console.error('Unexpected error fetching dashboard data:', err);
+      const errorMessage = 'An unexpected error occurred. Please try again.';
+      setError(errorMessage);
+      showToast('error', errorMessage);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -87,27 +172,97 @@ export const TeacherDashboard: React.FC = () => {
     fetchDashboardData();
   }, []);
 
-  const handleRefresh = () => {
-    fetchDashboardData(true);
-  };
+  // Debounce timer ref
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isRefreshingRef = useRef(false);
+
+  // Debounced refresh handler
+  const handleRefresh = useCallback(() => {
+    // Prevent multiple simultaneous refresh requests
+    if (isRefreshingRef.current || refreshing) {
+      return;
+    }
+
+    // Clear any existing debounce timer
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+
+    // Set debounce timer (1 second delay)
+    refreshTimerRef.current = setTimeout(() => {
+      isRefreshingRef.current = true;
+      fetchDashboardData(true).finally(() => {
+        isRefreshingRef.current = false;
+        refreshTimerRef.current = null;
+      });
+    }, 1000);
+  }, [refreshing]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, []);
 
   // Loading skeleton
   if (loading) {
     return (
       <div className="p-6 space-y-8">
-        <div className="bg-gradient-to-r from-purple-600 via-blue-600 to-green-600 rounded-2xl p-8 text-white">
-          <div className="animate-pulse">
-            <div className="h-8 bg-white/20 rounded w-1/3 mb-4"></div>
-            <div className="h-4 bg-white/20 rounded w-1/2"></div>
-          </div>
-        </div>
+        {/* Welcome Section Skeleton */}
+        <WelcomeSectionSkeleton />
+
+        {/* Stats Cards Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white border border-gray-200 rounded-lg p-6 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-              <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-            </div>
+            <StatsCardSkeleton key={i} />
           ))}
+        </div>
+
+        {/* Main Content Grid Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Courses and Assignments */}
+          <div className="lg:col-span-2 space-y-8">
+            {/* Courses Section Skeleton */}
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="h-6 w-32 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <CourseCardSkeleton key={i} />
+                ))}
+              </div>
+            </div>
+
+            {/* Pending Assignments Skeleton */}
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="h-6 w-40 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-200">
+                {[1, 2, 3].map((i) => (
+                  <AssignmentItemSkeleton key={i} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Sidebar Skeleton */}
+          <div className="space-y-8">
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="h-6 w-40 bg-gray-200 rounded mb-4 animate-pulse"></div>
+              <div className="space-y-3">
+                <div className="h-4 w-full bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-5/6 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -123,7 +278,8 @@ export const TeacherDashboard: React.FC = () => {
           <p className="text-red-700 mb-4">{error}</p>
           <button
             onClick={handleRefresh}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            className="px-4 py-2 min-h-[44px] bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors touch-manipulation"
+            aria-label="Retry loading dashboard"
           >
             Try Again
           </button>
@@ -133,6 +289,9 @@ export const TeacherDashboard: React.FC = () => {
   }
 
   const recentCourses = courses.slice(0, 3);
+  const hasMoreCourses = courses.length > 3;
+  const recentPendingAssignments = pendingAssignments.slice(0, 5);
+  const hasMorePendingAssignments = pendingAssignments.length > 5;
   const recentAnnouncements = announcements.slice(0, 3);
 
   // Stats cards data
@@ -177,6 +336,23 @@ export const TeacherDashboard: React.FC = () => {
 
   return (
     <div className="p-6 space-y-8">
+      {/* Partial Error Banner */}
+      {partialError && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-yellow-800 text-sm">{partialError}</p>
+          </div>
+          <button
+            onClick={() => setPartialError(null)}
+            className="text-yellow-600 hover:text-yellow-800 text-xl leading-none"
+            aria-label="Dismiss notification"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Welcome Section */}
       <div className="bg-gradient-to-r from-purple-600 via-blue-600 to-green-600 rounded-2xl p-8 text-white">
         <div className="flex items-center justify-between">
@@ -188,8 +364,9 @@ export const TeacherDashboard: React.FC = () => {
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
-                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
-                title="Refresh dashboard"
+                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={refreshing ? 'Refreshing...' : 'Refresh dashboard'}
+                aria-label="Refresh dashboard data"
               >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
@@ -241,17 +418,27 @@ export const TeacherDashboard: React.FC = () => {
         <div className="lg:col-span-2 space-y-8">
           {/* My Courses */}
           <div>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">My Courses</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <h2 className="text-xl font-bold text-gray-900">
+                My Courses
+                {hasMoreCourses && (
+                  <span className="text-sm font-normal text-gray-600 ml-2">
+                    (Showing 3 of {courses.length})
+                  </span>
+                )}
+              </h2>
               <div className="flex gap-3">
-                <a href="/courses/create" className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                <a href="/courses/create" className="flex items-center justify-center px-4 py-2 min-h-[44px] bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors touch-manipulation">
                   <Plus className="h-4 w-4 mr-2" />
-                  New Course
+                  <span className="hidden sm:inline">New Course</span>
+                  <span className="sm:hidden">New</span>
                 </a>
-                <a href="/courses" className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center">
-                  View all
-                  <Eye className="h-4 w-4 ml-1" />
-                </a>
+                {hasMoreCourses && (
+                  <a href="/courses" className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center min-h-[44px] touch-manipulation">
+                    View All ({courses.length})
+                    <Eye className="h-4 w-4 ml-1" />
+                  </a>
+                )}
               </div>
             </div>
             {recentCourses.length > 0 ? (
@@ -298,7 +485,7 @@ export const TeacherDashboard: React.FC = () => {
                 <p className="text-gray-600 mb-4">Create your first course to get started</p>
                 <a 
                   href="/courses/create"
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="inline-flex items-center justify-center px-4 py-2 min-h-[44px] bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors touch-manipulation"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Create Course
@@ -310,17 +497,26 @@ export const TeacherDashboard: React.FC = () => {
           {/* Pending Assignments */}
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Pending Grades</h2>
-              <a href="/assignments/teacher" className="text-blue-600 hover:text-blue-700 font-medium text-sm">
-                View all
-              </a>
+              <h2 className="text-xl font-bold text-gray-900">
+                Pending Grades
+                {hasMorePendingAssignments && (
+                  <span className="text-sm font-normal text-gray-600 ml-2">
+                    (Showing 5 of {pendingAssignments.length})
+                  </span>
+                )}
+              </h2>
+              {pendingAssignments.length > 0 && (
+                <a href="/assignments/manage" className="text-blue-600 hover:text-blue-700 font-medium text-sm min-h-[44px] flex items-center touch-manipulation">
+                  View All {hasMorePendingAssignments && `(${pendingAssignments.length})`}
+                </a>
+              )}
             </div>
-            {pendingAssignments.length > 0 ? (
+            {recentPendingAssignments.length > 0 ? (
               <div className="bg-white border border-gray-200 rounded-lg">
                 <div className="divide-y divide-gray-200">
-                  {pendingAssignments.map((assignment) => (
+                  {recentPendingAssignments.map((assignment) => (
                     <div key={assignment._id} className="p-4 hover:bg-gray-50">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex-1">
                           <h4 className="font-medium text-gray-900">{assignment.title}</h4>
                           <p className="text-sm text-gray-600 mt-1">
@@ -328,10 +524,10 @@ export const TeacherDashboard: React.FC = () => {
                           </p>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
+                          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full whitespace-nowrap">
                             Pending Review
                           </span>
-                          <a href="/assignments/teacher" className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                          <a href="/assignments/manage" className="text-blue-600 hover:text-blue-700 text-sm font-medium min-h-[44px] flex items-center touch-manipulation">
                             Grade
                           </a>
                         </div>
@@ -352,19 +548,19 @@ export const TeacherDashboard: React.FC = () => {
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <a href="/courses/create" className="bg-blue-50 hover:bg-blue-100 p-4 rounded-lg text-center transition-colors">
+              <a href="/courses/create" className="bg-blue-50 hover:bg-blue-100 p-4 min-h-[88px] rounded-lg text-center transition-colors flex flex-col items-center justify-center touch-manipulation">
                 <BookOpen className="h-8 w-8 text-blue-600 mx-auto mb-2" />
                 <span className="text-sm font-medium text-blue-900">Create Course</span>
               </a>
-              <a href="/assignments/teacher" className="bg-green-50 hover:bg-green-100 p-4 rounded-lg text-center transition-colors">
+              <a href="/assignments/teacher" className="bg-green-50 hover:bg-green-100 p-4 min-h-[88px] rounded-lg text-center transition-colors flex flex-col items-center justify-center touch-manipulation">
                 <FileText className="h-8 w-8 text-green-600 mx-auto mb-2" />
                 <span className="text-sm font-medium text-green-900">New Assignment</span>
               </a>
-              <a href="/assignments/teacher" className="bg-purple-50 hover:bg-purple-100 p-4 rounded-lg text-center transition-colors">
+              <a href="/assignments/manage" className="bg-purple-50 hover:bg-purple-100 p-4 min-h-[88px] rounded-lg text-center transition-colors flex flex-col items-center justify-center touch-manipulation">
                 <Award className="h-8 w-8 text-purple-600 mx-auto mb-2" />
                 <span className="text-sm font-medium text-purple-900">Grade Assignments</span>
               </a>
-              <a href="/analytics" className="bg-yellow-50 hover:bg-yellow-100 p-4 rounded-lg text-center transition-colors">
+              <a href="/analytics" className="bg-yellow-50 hover:bg-yellow-100 p-4 min-h-[88px] rounded-lg text-center transition-colors flex flex-col items-center justify-center touch-manipulation">
                 <TrendingUp className="h-8 w-8 text-yellow-600 mx-auto mb-2" />
                 <span className="text-sm font-medium text-yellow-900">View Analytics</span>
               </a>
@@ -386,28 +582,15 @@ export const TeacherDashboard: React.FC = () => {
               </h3>
             </div>
             <div className="p-6">
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">Machine Learning - Lecture</p>
-                    <p className="text-sm text-gray-600">10:00 AM - 11:30 AM</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">Office Hours</p>
-                    <p className="text-sm text-gray-600">2:00 PM - 4:00 PM</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">Python Programming - Lab</p>
-                    <p className="text-sm text-gray-600">4:30 PM - 6:00 PM</p>
-                  </div>
-                </div>
+              <div className="text-center py-8">
+                <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600 text-sm">No events scheduled for today</p>
+                <a 
+                  href="/schedule" 
+                  className="text-blue-600 hover:text-blue-700 text-sm font-medium mt-2 inline-block"
+                >
+                  View Full Schedule
+                </a>
               </div>
             </div>
           </div>
@@ -480,6 +663,15 @@ export const TeacherDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toast.show && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={hideToast}
+        />
+      )}
     </div>
   );
 };

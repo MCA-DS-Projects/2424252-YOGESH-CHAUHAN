@@ -25,6 +25,8 @@ export const CoursesPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState('title');
+  const [showArchived, setShowArchived] = useState(false);
+  const isTeacher = user?.role === 'teacher';
 
   const handleCourseClick = (courseId: string) => {
     window.history.pushState({}, '', `/courses/${courseId}`);
@@ -51,7 +53,7 @@ export const CoursesPage: React.FC = () => {
     'DevOps'
   ];
 
-  const isTeacher = user?.role === 'teacher';
+  
 
   const filteredCourses = courses
     .filter(course =>
@@ -76,12 +78,22 @@ export const CoursesPage: React.FC = () => {
       }
     });
 
+  const activeCourses = filteredCourses.filter(course => course.is_active !== false);
+  const archivedCourses = filteredCourses.filter(course => course.is_active === false);
+  const visibleCourses = isTeacher
+    ? (showArchived ? archivedCourses : activeCourses)
+    : filteredCourses;
+
   const stats = {
-    total: courses.length,
-    active: courses.filter(c => c.progress < 100).length,
-    completed: courses.filter(c => c.progress === 100).length,
-    totalStudents: courses.reduce((sum, c) => sum + (c.students || 0), 0)
+    total: visibleCourses.length,
+    active: visibleCourses.filter(c => (c.progress || 0) < 100).length,
+    completed: visibleCourses.filter(c => c.progress === 100).length,
+    totalStudents: visibleCourses.reduce((sum, c) => sum + (c.students || 0), 0)
   };
+
+  const totalMatchingCourses = isTeacher
+    ? (showArchived ? archivedCourses.length : activeCourses.length)
+    : filteredCourses.length;
 
   return (
     <div className="p-3 sm:p-4 md:p-6">
@@ -95,13 +107,23 @@ export const CoursesPage: React.FC = () => {
             </p>
           </div>
           {isTeacher && (
-            <a
-              href="/courses/create"
-              className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base"
-            >
-              <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
-              Create Course
-            </a>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+              {archivedCourses.length > 0 && (
+                <button
+                  onClick={() => setShowArchived((prev) => !prev)}
+                  className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-3 border border-gray-300 rounded-lg text-sm sm:text-base text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  {showArchived ? 'Show Active Courses' : `View Archived (${archivedCourses.length})`}
+                </button>
+              )}
+              <a
+                href="/courses/create"
+                className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base"
+              >
+                <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                Create Course
+              </a>
+            </div>
           )}
         </div>
 
@@ -266,8 +288,9 @@ export const CoursesPage: React.FC = () => {
 
       {/* Results Count */}
       <div className="mb-4 text-sm text-gray-600">
-        Showing <span className="font-semibold text-gray-900">{filteredCourses.length}</span> of{' '}
-        <span className="font-semibold text-gray-900">{courses.length}</span> courses
+        Showing <span className="font-semibold text-gray-900">{visibleCourses.length}</span> of{' '}
+        <span className="font-semibold text-gray-900">{totalMatchingCourses}</span>{' '}
+        {isTeacher && showArchived ? 'archived courses' : 'courses'}
       </div>
 
       {/* Courses Grid/List */}
@@ -276,8 +299,8 @@ export const CoursesPage: React.FC = () => {
           ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6'
           : 'space-y-4'
       }>
-        {filteredCourses.length > 0 ? (
-          filteredCourses.map((course) => (
+        {visibleCourses.length > 0 ? (
+          visibleCourses.map((course) => (
             <CourseCard 
               key={course.id} 
               course={course} 
@@ -292,7 +315,9 @@ export const CoursesPage: React.FC = () => {
             <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No courses found</h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm || filterCategory !== 'all' || filterStatus !== 'all'
+              {showArchived
+                ? 'No archived courses to display'
+                : searchTerm || filterCategory !== 'all' || filterStatus !== 'all'
                 ? 'Try adjusting your search or filter criteria'
                 : isTeacher
                   ? 'Start by creating your first course'

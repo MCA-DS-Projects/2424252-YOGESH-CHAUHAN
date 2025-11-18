@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { learnerAnalyticsAPI } from '../../config/api';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  Bell,
   X,
   AlertTriangle,
   TrendingDown,
@@ -64,7 +63,7 @@ const LearnerAlerts: React.FC<LearnerAlertsProps> = ({ className = '' }) => {
       case 'deadline':
         return <Clock className="h-4 w-4" />;
       default:
-        return <Bell className="h-4 w-4" />;
+        return <AlertTriangle className="h-4 w-4" />;
     }
   };
 
@@ -100,18 +99,19 @@ const LearnerAlerts: React.FC<LearnerAlertsProps> = ({ className = '' }) => {
 
   return (
     <div className={`relative ${className}`}>
-      {/* Alert Bell Button */}
+      {/* Student Alerts Button - Using AlertTriangle icon to distinguish from notifications */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`relative p-2 rounded-full transition-colors ${
+        className={`relative p-2 rounded-lg transition-colors ${
           hasUnreadAlerts 
-            ? 'bg-red-100 text-red-600 hover:bg-red-200' 
-            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            ? 'bg-orange-100 text-orange-600 hover:bg-orange-200' 
+            : 'hover:bg-gray-100 text-gray-600'
         }`}
+        title="Student Performance Alerts"
       >
-        <Bell className="h-5 w-5" />
+        <AlertTriangle className="h-5 w-5" />
         {hasUnreadAlerts && (
-          <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 h-4 w-4 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center">
             {visibleAlerts.length > 9 ? '9+' : visibleAlerts.length}
           </span>
         )}

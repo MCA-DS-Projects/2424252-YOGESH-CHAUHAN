@@ -1,14 +1,38 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
+
+/**
+ * ErrorBoundary Component
+ * 
+ * A React error boundary that catches JavaScript errors anywhere in the child component tree,
+ * logs those errors, and displays a fallback UI instead of crashing the whole application.
+ * 
+ * Usage:
+ * ```tsx
+ * <ErrorBoundary>
+ *   <YourComponent />
+ * </ErrorBoundary>
+ * ```
+ * 
+ * Features:
+ * - Catches and logs errors to console for debugging
+ * - Displays user-friendly error message
+ * - Provides "Try Again" button to reset error state
+ * - Provides "Reload Page" button to refresh the entire page
+ * - Supports custom fallback UI via the `fallback` prop
+ * 
+ * @see https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary
+ */
 
 interface Props {
   children: ReactNode;
-  fallback?: (error: Error, resetError: () => void) => ReactNode;
+  fallback?: ReactNode;
 }
 
 interface State {
   hasError: boolean;
   error: Error | null;
+  errorInfo: ErrorInfo | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -16,80 +40,77 @@ export class ErrorBoundary extends Component<Props, State> {
     super(props);
     this.state = {
       hasError: false,
-      error: null
+      error: null,
+      errorInfo: null
     };
   }
 
   static getDerivedStateFromError(error: Error): State {
     return {
       hasError: true,
-      error
+      error,
+      errorInfo: null
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log error to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error caught by boundary:', error, errorInfo);
-    }
-
-    // You can also log to an error reporting service here
-    // logErrorToService(error, errorInfo);
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    this.setState({
+      error,
+      errorInfo
+    });
   }
 
-  resetError = (): void => {
+  handleReload = () => {
+    window.location.reload();
+  };
+
+  handleReset = () => {
     this.setState({
       hasError: false,
-      error: null
+      error: null,
+      errorInfo: null
     });
   };
 
-  render(): ReactNode {
-    if (this.state.hasError && this.state.error) {
-      // Use custom fallback if provided
+  render() {
+    if (this.state.hasError) {
       if (this.props.fallback) {
-        return this.props.fallback(this.state.error, this.resetError);
+        return this.props.fallback;
       }
 
-      // Default error UI
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-            <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mx-auto mb-4">
-              <AlertCircle className="h-8 w-8 text-red-600" />
-            </div>
-
-            <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+          <div className="max-w-md w-full bg-white border border-red-200 rounded-lg p-8 text-center shadow-lg">
+            <AlertTriangle className="h-16 w-16 text-red-600 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Something went wrong
-            </h1>
-
-            <p className="text-gray-600 text-center mb-6">
-              We're sorry, but something unexpected happened. Please try refreshing the page.
+            </h2>
+            <p className="text-gray-600 mb-6">
+              We encountered an unexpected error. Please try reloading the page.
             </p>
-
-            {process.env.NODE_ENV === 'development' && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-                <p className="text-sm font-medium text-red-900 mb-2">Error Details:</p>
-                <p className="text-xs text-red-800 font-mono break-all">
-                  {this.state.error.message}
+            
+            {this.state.error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-left">
+                <p className="text-sm font-mono text-red-800 break-all">
+                  {this.state.error.toString()}
                 </p>
               </div>
             )}
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 justify-center">
               <button
-                onClick={this.resetError}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                onClick={this.handleReset}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
               >
-                <RefreshCw className="h-4 w-4" />
                 Try Again
               </button>
-
               <button
-                onClick={() => window.location.href = '/'}
-                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                onClick={this.handleReload}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
               >
-                Go Home
+                <RefreshCw className="h-4 w-4" />
+                Reload Page
               </button>
             </div>
           </div>
@@ -101,16 +122,4 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-/**
- * Hook-based error boundary wrapper
- */
-export const withErrorBoundary = <P extends object>(
-  Component: React.ComponentType<P>,
-  fallback?: (error: Error, resetError: () => void) => ReactNode
-) => {
-  return (props: P) => (
-    <ErrorBoundary fallback={fallback}>
-      <Component {...props} />
-    </ErrorBoundary>
-  );
-};
+export default ErrorBoundary;
