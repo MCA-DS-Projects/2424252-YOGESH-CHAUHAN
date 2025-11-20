@@ -3,7 +3,7 @@ import { LoginForm } from './LoginForm';
 import { MultiStepRegisterForm } from './MultiStepRegisterForm';
 import { ForgotPasswordForm } from './ForgotPasswordForm';
 import { ResetPasswordForm } from './ResetPasswordForm';
-import { Brain, GraduationCap, ArrowLeft, Star, Users, BookOpen, Award, TrendingUp } from 'lucide-react';
+import { Brain, GraduationCap, ArrowLeft, Star, Users, BookOpen, Award, TrendingUp, Lightbulb, Rocket, BarChart3, Target } from 'lucide-react';
 
 interface AuthPageProps {
   onBackToLanding?: () => void;
@@ -15,24 +15,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBackToLanding }) => {
 
   const features = [
     {
-      icon: Brain,
-      title: 'AI-Powered Learning',
-      description: 'Personalized learning paths powered by advanced AI'
+      icon: Lightbulb,
+      title: 'Intelligent Learning',
+      description: 'AI-driven insights that adapt to your learning style'
     },
     {
-      icon: TrendingUp,
-      title: 'Progress Analytics',
-      description: 'Real-time progress tracking and detailed insights'
+      icon: Rocket,
+      title: 'Accelerated Growth',
+      description: 'Fast-track your skills with optimized learning paths'
     },
     {
-      icon: BookOpen,
-      title: 'Interactive Content',
-      description: 'Engaging multimedia courses and assessments'
+      icon: BarChart3,
+      title: 'Performance Analytics',
+      description: 'Deep insights with improvement recommendations'
     },
     {
-      icon: Award,
-      title: 'Achievements',
-      description: '24/7 AI teaching assistant and community support'
+      icon: Target,
+      title: 'Goal-Oriented System',
+      description: 'Set, track, and achieve your learning objectives'
     }
   ];
 
@@ -40,13 +40,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBackToLanding }) => {
     {
       name: 'Sarah Johnson',
       role: 'Data Science Student',
-      content: 'EduNexa transformed my learning experience completely!',
+      content: 'EduNexa helped me improve my grades by 40% in just one semester!',
       rating: 5
     },
     {
       name: 'Michael Chen',
       role: 'Software Engineer',
-      content: 'The AI recommendations are incredibly accurate.',
+      content: 'The systematic approach made complex topics so much easier.',
       rating: 5
     }
   ];
@@ -77,7 +77,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBackToLanding }) => {
             </div>
             <div>
               <h1 className="text-lg font-bold text-gray-900">EduNexa</h1>
-              <p className="text-xs text-gray-500">AI-Powered Learning</p>
+              <p className="text-xs text-gray-500">Learning Improved System</p>
             </div>
           </div>
         </div>
@@ -92,10 +92,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBackToLanding }) => {
               <div>
                 <h1 className="text-5xl font-bold text-gray-900 mb-4 leading-tight">
                   Welcome to the
-                  <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-green-600 bg-clip-text text-transparent"> Future of Learning</span>
+                  <span className="bg-gradient-to-r from-blue-600 via-cyan-600 to-purple-600 bg-clip-text text-transparent"> Future of Learning</span>
                 </h1>
                 <p className="text-xl text-gray-600 leading-relaxed">
-                  Join thousands of students transforming their education with AI-powered personalized learning experiences.
+                  Join thousands of students achieving measurable improvements with our intelligent learning system.
                 </p>
               </div>
 
@@ -172,7 +172,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBackToLanding }) => {
                   </div>
                 </div>
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">Welcome to EduNexa</h2>
-                <p className="text-sm text-gray-600">AI-Powered Learning Platform</p>
+                <p className="text-sm text-gray-600">Learning Improved System</p>
               </div>
 
               {/* Auth Forms */}

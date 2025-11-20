@@ -129,6 +129,30 @@ def validate_file_size(file_size: int, max_size_mb: int, field_name: str = 'file
     if file_size > max_size_bytes:
         raise ValidationError(f'{field_name} size must not exceed {max_size_mb}MB', field_name)
 
+def validate_file_path(file_path: str, field_name: str = 'file_path') -> None:
+    """
+    Validate file path to prevent directory traversal attacks
+    Requirement 6.7: Validate all file paths to prevent directory traversal attacks
+    """
+    if not file_path:
+        raise ValidationError(f'{field_name} cannot be empty', field_name)
+    
+    # Check for directory traversal patterns
+    if '..' in file_path:
+        raise ValidationError(f'{field_name} contains invalid directory traversal pattern', field_name)
+    
+    # Check for absolute paths (should be relative)
+    if file_path.startswith('/') or file_path.startswith('\\'):
+        raise ValidationError(f'{field_name} cannot be an absolute path', field_name)
+    
+    # Check for Windows drive letters
+    if len(file_path) >= 2 and file_path[1] == ':':
+        raise ValidationError(f'{field_name} cannot contain drive letters', field_name)
+    
+    # Check for null bytes
+    if '\x00' in file_path:
+        raise ValidationError(f'{field_name} contains invalid characters', field_name)
+
 def validate_course_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Validate and sanitize course creation/update data

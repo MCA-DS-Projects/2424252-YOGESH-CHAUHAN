@@ -1,52 +1,50 @@
-from flask import Blueprint, request, jsonify, current_app, send_from_directory
+from flask import Blueprint, request, jsonify, current_app, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from bson import ObjectId
 from datetime import datetime
 import os
 import uuid
+from utils.validation import validate_file_path, ValidationError
+from utils.file_logger import (
+    log_file_upload,
+    log_file_access,
+    log_file_error,
+    log_file_validation_failure
+)
 
 documents_bp = Blueprint('documents', __name__)
 
-# Configuration
-UPLOAD_FOLDER = 'uploads/documents'
-ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'ppt', 'pptx', 'txt', 'xls', 'xlsx'}
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads', 'documents')
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'pptx', 'txt'}
+MAX_FILE_SIZE = 50 * 1024 * 1024
 
-# Ensure upload directory exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def require_teacher(f):
-    """Decorator to ensure only teachers can access the endpoint"""
     @jwt_required()
     def decorated_function(*args, **kwargs):
         user_id = get_jwt_identity()
         db = current_app.db
-        
         user = db.users.find_one({'_id': ObjectId(user_id)})
         if not user:
             return jsonify({'error': 'User not found'}), 404
-        
         if user.get('role') != 'teacher':
             return jsonify({'error': 'Only teachers can upload documents'}), 403
-        
         return f(*args, **kwargs)
-    
     decorated_function.__name__ = f.__name__
     return decorated_function
 
 @documents_bp.route('/upload', methods=['POST'])
 @require_teacher
 def upload_document():
-    """Upload a document file (teachers only)"""
     try:
         user_id = get_jwt_identity()
         db = current_app.db
         
-        # Check if file is in request
         if 'document' not in request.files:
             return jsonify({'error': 'No document file provided'}), 400
         
@@ -55,280 +53,204 @@ def upload_document():
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
         
-        # Validate file type
         if not allowed_file(file.filename):
+            # Requirement 6.8: Log validation failure
+            log_file_validation_failure(
+                user_id=user_id,
+                filename=file.filename,
+                reason=f'Invalid file type. Allowed: {", ".join(ALLOWED_EXTENSIONS)}',
+                file_type='document'
+            )
             return jsonify({'error': f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
         
-        # Get additional metadata from form data
-        title = request.form.get('title', '')
-        description = request.form.get('description', '')
-        course_id = request.form.get('courseId', '')
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
         
-        # Generate unique filename
+        if file_size > MAX_FILE_SIZE:
+            # Requirement 6.8: Log validation failure
+            log_file_validation_failure(
+                user_id=user_id,
+                filename=file.filename,
+                reason=f'File size {file_size} bytes exceeds 50MB limit',
+                file_type='document'
+            )
+            return jsonify({'error': f'File size exceeds maximum allowed size of 50MB'}), 413
+        
         file_extension = file.filename.rsplit('.', 1)[1].lower()
         unique_filename = f"{uuid.uuid4()}.{file_extension}"
         file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
         
-        # Save file
         file.save(file_path)
         
-        # Get file size
-        file_size = os.path.getsize(file_path)
+        mime_types = {
+            'pdf': 'application/pdf',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'txt': 'text/plain'
+        }
+        mime_type = mime_types.get(file_extension, 'application/octet-stream')
         
-        # Create document record in database
         document_doc = {
             'filename': unique_filename,
-            'originalFilename': secure_filename(file.filename),
-            'title': title or secure_filename(file.filename),
-            'description': description,
-            'filePath': file_path,
-            'fileSize': file_size,
-            'uploadedBy': ObjectId(user_id),
-            'courseId': ObjectId(course_id) if course_id else None,
-            'uploadedAt': datetime.utcnow(),
-            'downloads': 0,
-            'status': 'active'
+            'original_filename': secure_filename(file.filename),
+            'file_path': file_path,
+            'file_size': file_size,
+            'mime_type': mime_type,
+            'uploaded_by': user_id,
+            'created_at': datetime.utcnow()
         }
         
         result = db.documents.insert_one(document_doc)
         document_id = str(result.inserted_id)
         
-        # Update course if courseId provided
-        if course_id:
-            db.courses.update_one(
-                {'_id': ObjectId(course_id)},
-                {
-                    '$push': {
-                        'documents': {
-                            'documentId': ObjectId(document_id),
-                            'title': document_doc['title'],
-                            'addedAt': datetime.utcnow()
-                        }
-                    }
-                }
-            )
+        # Requirement 6.8: Log file upload operation with user ID, file path, and timestamp
+        log_file_upload(
+            user_id=user_id,
+            file_path=file_path,
+            file_size=file_size,
+            file_type='document',
+            operation_type='upload'
+        )
         
         return jsonify({
             'message': 'Document uploaded successfully',
             'documentId': document_id,
-            'documentUrl': f'/api/documents/download/{document_id}',
+            'document_id': document_id,
             'filename': unique_filename,
-            'title': document_doc['title'],
-            'url': f'/api/documents/download/{document_id}'
+            'originalFilename': secure_filename(file.filename),
+            'original_filename': secure_filename(file.filename),
+            'fileSize': file_size,
+            'file_size': file_size,
+            'mimeType': mime_type,
+            'mime_type': mime_type,
+            'documentUrl': f'/api/documents/{document_id}',
+            'document_url': f'/api/documents/{document_id}'
         }), 201
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@documents_bp.route('/download/<document_id>', methods=['GET'])
-@jwt_required()
-def download_document(document_id):
-    """Download a document file"""
-    try:
-        db = current_app.db
-        
-        # Get document record
-        document = db.documents.find_one({'_id': ObjectId(document_id)})
-        if not document:
-            return jsonify({'error': 'Document not found'}), 404
-        
-        # Increment download count
-        db.documents.update_one(
-            {'_id': ObjectId(document_id)},
-            {'$inc': {'downloads': 1}}
+        # Requirement 6.8: Log errors with full stack traces
+        log_file_error(
+            user_id=user_id if 'user_id' in locals() else 'unknown',
+            file_path=file.filename if 'file' in locals() and file else 'unknown',
+            error_message=str(e),
+            file_type='document',
+            operation_type='upload'
         )
-        
-        # Get the directory and filename
-        directory = os.path.dirname(document['filePath'])
-        filename = document['filename']
-        
-        return send_from_directory(directory, filename, as_attachment=True, download_name=document['originalFilename'])
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@documents_bp.route('/view/<document_id>', methods=['GET'])
-@jwt_required()
-def view_document(document_id):
-    """View a document file (inline)"""
-    try:
-        db = current_app.db
-        
-        # Get document record
-        document = db.documents.find_one({'_id': ObjectId(document_id)})
-        if not document:
-            return jsonify({'error': 'Document not found'}), 404
-        
-        # Get the directory and filename
-        directory = os.path.dirname(document['filePath'])
-        filename = document['filename']
-        
-        return send_from_directory(directory, filename, as_attachment=False)
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@documents_bp.route('/list', methods=['GET'])
-@jwt_required()
-def list_documents():
-    """List all documents (with optional course filter)"""
-    try:
-        db = current_app.db
-        user_id = get_jwt_identity()
-        
-        # Get query parameters
-        course_id = request.args.get('courseId')
-        page = int(request.args.get('page', 1))
-        limit = int(request.args.get('limit', 10))
-        
-        # Build query
-        query = {'status': 'active'}
-        if course_id:
-            query['courseId'] = ObjectId(course_id)
-        
-        # Get user to check role
-        user = db.users.find_one({'_id': ObjectId(user_id)})
-        
-        # If student, only show documents from enrolled courses
-        if user.get('role') == 'student':
-            enrolled_courses = user.get('enrolledCourses', [])
-            query['courseId'] = {'$in': [ObjectId(c) for c in enrolled_courses]}
-        
-        # Get total count
-        total = db.documents.count_documents(query)
-        
-        # Get documents with pagination
-        documents = list(db.documents.find(query)
-                        .sort('uploadedAt', -1)
-                        .skip((page - 1) * limit)
-                        .limit(limit))
-        
-        # Format response
-        document_list = []
-        for doc in documents:
-            uploader = db.users.find_one({'_id': doc['uploadedBy']})
-            document_list.append({
-                'id': str(doc['_id']),
-                'title': doc['title'],
-                'description': doc.get('description', ''),
-                'filename': doc['originalFilename'],
-                'fileSize': doc['fileSize'],
-                'uploadedBy': {
-                    'id': str(doc['uploadedBy']),
-                    'name': uploader.get('name', 'Unknown') if uploader else 'Unknown'
-                },
-                'uploadedAt': doc['uploadedAt'].isoformat(),
-                'downloads': doc.get('downloads', 0),
-                'documentUrl': f'/api/documents/download/{str(doc["_id"])}'
-            })
-        
-        return jsonify({
-            'documents': document_list,
-            'total': total,
-            'page': page,
-            'limit': limit,
-            'totalPages': (total + limit - 1) // limit
-        }), 200
-        
-    except Exception as e:
+        current_app.logger.error(f"Error uploading document: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @documents_bp.route('/<document_id>', methods=['GET'])
 @jwt_required()
-def get_document(document_id):
-    """Get document details"""
-    try:
-        db = current_app.db
-        
-        document = db.documents.find_one({'_id': ObjectId(document_id)})
-        if not document:
-            return jsonify({'error': 'Document not found'}), 404
-        
-        uploader = db.users.find_one({'_id': document['uploadedBy']})
-        
-        return jsonify({
-            'id': str(document['_id']),
-            'title': document['title'],
-            'description': document.get('description', ''),
-            'filename': document['originalFilename'],
-            'fileSize': document['fileSize'],
-            'uploadedBy': {
-                'id': str(document['uploadedBy']),
-                'name': uploader.get('name', 'Unknown') if uploader else 'Unknown'
-            },
-            'uploadedAt': document['uploadedAt'].isoformat(),
-            'downloads': document.get('downloads', 0),
-            'documentUrl': f'/api/documents/download/{document_id}'
-        }), 200
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@documents_bp.route('/<document_id>', methods=['DELETE'])
-@require_teacher
-def delete_document(document_id):
-    """Delete a document (teachers only)"""
+def serve_document(document_id):
+    """
+    Serve document file with proper MIME type and Content-Disposition headers.
+    Implements user authorization check (enrollment verification).
+    """
     try:
         user_id = get_jwt_identity()
         db = current_app.db
         
-        document = db.documents.find_one({'_id': ObjectId(document_id)})
+        # Get document from database
+        try:
+            document = db.documents.find_one({'_id': ObjectId(document_id)})
+        except:
+            return jsonify({'error': 'Invalid document ID'}), 400
+        
         if not document:
             return jsonify({'error': 'Document not found'}), 404
         
-        # Check if user is the uploader
-        if str(document['uploadedBy']) != user_id:
-            return jsonify({'error': 'You can only delete your own documents'}), 403
+        # Get user to check role
+        user = db.users.find_one({'_id': ObjectId(user_id)})
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         
-        # Delete file from filesystem
-        if os.path.exists(document['filePath']):
-            os.remove(document['filePath'])
+        # Find which course this document belongs to
+        # Documents are linked to materials, materials are linked to courses
+        material = db.materials.find_one({'content': document_id, 'type': 'document'})
         
-        # Delete from database
-        db.documents.delete_one({'_id': ObjectId(document_id)})
+        if not material:
+            # If not found by content field, try finding by document_id in materials
+            material = db.materials.find_one({'document_id': document_id})
         
-        # Remove from courses
-        db.courses.update_many(
-            {},
-            {'$pull': {'documents': {'documentId': ObjectId(document_id)}}}
+        if not material:
+            # Document exists but not linked to any course material
+            # Allow teachers and admins to access, deny students
+            if user.get('role') not in ['teacher', 'admin']:
+                return jsonify({'error': 'Access denied'}), 403
+        else:
+            # Check if user has access to the course
+            course_id = material.get('course_id')
+            
+            if user.get('role') == 'student':
+                # Check enrollment
+                enrollment = db.enrollments.find_one({
+                    'course_id': course_id,
+                    'student_id': user_id
+                })
+                if not enrollment:
+                    return jsonify({'error': 'Access denied. You must be enrolled in this course.'}), 403
+            elif user.get('role') == 'teacher':
+                # Check if teacher owns the course
+                course = db.courses.find_one({'_id': ObjectId(course_id)})
+                if course and course.get('teacher_id') != user_id:
+                    return jsonify({'error': 'Access denied'}), 403
+            # Admins have access to all documents
+        
+        # Get file path
+        file_path = document.get('file_path')
+        
+        # Requirement 6.4: Return 404 for non-existent files
+        if not file_path:
+            current_app.logger.error(f"Document {document_id} has no file_path in database")
+            return jsonify({'error': 'Document file path not found'}), 404
+        
+        # Requirement 6.7: Validate file path to prevent directory traversal
+        try:
+            # Extract just the filename from the full path for validation
+            filename = os.path.basename(file_path)
+            validate_file_path(filename)
+        except ValidationError as e:
+            current_app.logger.warning(f"Invalid file path for document {document_id}: {file_path}")
+            return jsonify({'error': 'Invalid file path'}), 400
+        
+        # Requirement 6.5: Handle missing files with clear error
+        if not os.path.exists(file_path):
+            current_app.logger.error(f"Document file not found on disk: {file_path}")
+            return jsonify({'error': 'Document file not found on server'}), 404
+        
+        # Get filename and MIME type
+        filename = document.get('filename')
+        original_filename = document.get('original_filename', filename)
+        mime_type = document.get('mime_type', 'application/octet-stream')
+        
+        # Create response with file
+        response = Response()
+        response.headers['Content-Type'] = mime_type
+        response.headers['Content-Disposition'] = f'attachment; filename="{original_filename}"'
+        
+        # Read and send file
+        with open(file_path, 'rb') as f:
+            response.data = f.read()
+        
+        # Requirement 6.8: Log file access operation with user ID, file path, and timestamp
+        log_file_access(
+            user_id=user_id,
+            file_path=file_path,
+            file_type='document',
+            operation_type='download'
         )
         
-        return jsonify({'message': 'Document deleted successfully'}), 200
+        return response
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@documents_bp.route('/<document_id>', methods=['PUT'])
-@require_teacher
-def update_document(document_id):
-    """Update document metadata (teachers only)"""
-    try:
-        user_id = get_jwt_identity()
-        db = current_app.db
-        data = request.get_json()
-        
-        document = db.documents.find_one({'_id': ObjectId(document_id)})
-        if not document:
-            return jsonify({'error': 'Document not found'}), 404
-        
-        # Check if user is the uploader
-        if str(document['uploadedBy']) != user_id:
-            return jsonify({'error': 'You can only update your own documents'}), 403
-        
-        # Update fields
-        update_data = {}
-        if 'title' in data:
-            update_data['title'] = data['title']
-        if 'description' in data:
-            update_data['description'] = data['description']
-        
-        if update_data:
-            db.documents.update_one(
-                {'_id': ObjectId(document_id)},
-                {'$set': update_data}
-            )
-        
-        return jsonify({'message': 'Document updated successfully'}), 200
-        
-    except Exception as e:
+        # Requirement 6.8: Log errors with full stack traces
+        log_file_error(
+            user_id=user_id if 'user_id' in locals() else 'unknown',
+            file_path=document_id if 'document_id' in locals() else 'unknown',
+            error_message=str(e),
+            file_type='document',
+            operation_type='download'
+        )
+        current_app.logger.error(f"Error serving document: {str(e)}")
         return jsonify({'error': str(e)}), 500

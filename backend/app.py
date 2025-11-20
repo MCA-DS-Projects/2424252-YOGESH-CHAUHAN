@@ -6,6 +6,8 @@ from pymongo import MongoClient
 from bson import ObjectId
 from datetime import datetime, timedelta
 import os
+import logging
+from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 
 # Import route modules
@@ -42,6 +44,60 @@ app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key-chan
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=2)  # Reduced to 2 hours
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=7)  # Refresh token expires in 7 days
 app.config['MONGO_URI'] = os.getenv('MONGO_URI', 'mongodb://localhost:27017/edunexa_lms')
+
+# Configure logging - Requirement 6.8: Log all file operations
+# Create logs directory if it doesn't exist
+logs_dir = os.path.join(os.path.dirname(__file__), 'logs')
+os.makedirs(logs_dir, exist_ok=True)
+
+# Configure file handler for general logs
+file_handler = RotatingFileHandler(
+    os.path.join(logs_dir, 'edunexa.log'),
+    maxBytes=10485760,  # 10MB
+    backupCount=10
+)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter(
+    '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
+))
+
+# Configure file handler for file operations specifically
+file_ops_handler = RotatingFileHandler(
+    os.path.join(logs_dir, 'file_operations.log'),
+    maxBytes=10485760,  # 10MB
+    backupCount=10
+)
+file_ops_handler.setLevel(logging.INFO)
+file_ops_handler.setFormatter(logging.Formatter(
+    '[%(asctime)s] %(levelname)s - User: %(user_id)s - Operation: %(operation)s - File: %(file_path)s - %(message)s',
+    defaults={'user_id': 'N/A', 'operation': 'N/A', 'file_path': 'N/A'}
+))
+
+# Configure error handler with full stack traces
+error_handler = RotatingFileHandler(
+    os.path.join(logs_dir, 'errors.log'),
+    maxBytes=10485760,  # 10MB
+    backupCount=10
+)
+error_handler.setLevel(logging.ERROR)
+error_handler.setFormatter(logging.Formatter(
+    '[%(asctime)s] %(levelname)s in %(module)s [%(pathname)s:%(lineno)d]:\n%(message)s\n'
+))
+
+# Add handlers to app logger
+app.logger.addHandler(file_handler)
+app.logger.addHandler(file_ops_handler)
+app.logger.addHandler(error_handler)
+app.logger.setLevel(logging.INFO)
+
+# Also log to console in development
+if app.debug:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+    console_handler.setFormatter(logging.Formatter(
+        '[%(asctime)s] %(levelname)s: %(message)s'
+    ))
+    app.logger.addHandler(console_handler)
 
 # Server startup time for session invalidation
 SERVER_START_TIME = datetime.utcnow()

@@ -23,6 +23,16 @@ def create_indexes(db):
     db.courses.create_index("category")
     db.courses.create_index("is_active")
     
+    # Modules collection indexes (Requirement 7.2)
+    db.modules.create_index("course_id")
+    db.modules.create_index([("course_id", 1), ("order", 1)])
+    
+    # Materials collection indexes (Requirement 7.3)
+    db.materials.create_index("course_id")
+    db.materials.create_index("module_id")
+    db.materials.create_index([("module_id", 1), ("order", 1)])
+    db.materials.create_index("type")
+    
     # Enrollments collection indexes
     db.enrollments.create_index([("student_id", 1), ("course_id", 1)], unique=True)
     db.enrollments.create_index("course_id")
@@ -36,7 +46,16 @@ def create_indexes(db):
     db.submissions.create_index([("assignment_id", 1), ("student_id", 1)], unique=True)
     db.submissions.create_index("student_id")
     
-
+    # Progress collection indexes
+    db.progress.create_index([("student_id", 1), ("course_id", 1)], unique=True)
+    db.progress.create_index("course_id")
+    db.progress.create_index("student_id")
+    
+    # Video progress collection indexes (Requirement 5.7)
+    db.video_progress.create_index([("student_id", 1), ("video_id", 1)], unique=True)
+    db.video_progress.create_index("course_id")
+    db.video_progress.create_index("student_id")
+    db.video_progress.create_index("video_id")
     
     # Chat history indexes
     db.chat_history.create_index("user_id")

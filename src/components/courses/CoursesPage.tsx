@@ -29,8 +29,8 @@ export const CoursesPage: React.FC = () => {
   const isTeacher = user?.role === 'teacher';
 
   const handleCourseClick = (courseId: string) => {
-    window.history.pushState({}, '', `/courses/${courseId}`);
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    // Navigate to course detail page with proper route
+    window.location.href = `/course-detail?id=${courseId}`;
   };
 
   const handleCourseUpdate = () => {

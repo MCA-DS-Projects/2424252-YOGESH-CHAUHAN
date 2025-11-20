@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from bson import ObjectId
 from datetime import datetime, timedelta
 import os
+import uuid
 from werkzeug.utils import secure_filename
 from routes.notifications import create_notification
 from utils.validation import (
@@ -10,7 +11,14 @@ from utils.validation import (
     validate_material_data,
     validate_file_type,
     validate_file_size,
+    validate_file_path,
     ValidationError
+)
+from utils.file_logger import (
+    log_file_upload,
+    log_file_access,
+    log_file_error,
+    log_file_validation_failure
 )
 
 courses_bp = Blueprint('courses', __name__)
@@ -56,6 +64,10 @@ def get_courses():
         for course in courses:
             course['_id'] = str(course['_id'])
             course['course_id'] = str(course['_id'])
+            
+            # Ensure thumbnail is present
+            if 'thumbnail' not in course or not course['thumbnail']:
+                course['thumbnail'] = 'https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg?auto=compress&cs=tinysrgb&w=400'
             
             # Get teacher info
             teacher = db.users.find_one({'_id': ObjectId(course['teacher_id'])})
@@ -185,14 +197,32 @@ def get_course(course_id):
         course['_id'] = str(course['_id'])
         course['course_id'] = str(course['_id'])
         
+        # Ensure thumbnail is present
+        if 'thumbnail' not in course or not course['thumbnail']:
+            course['thumbnail'] = 'https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg?auto=compress&cs=tinysrgb&w=400'
+        
         # Get teacher info
         teacher = db.users.find_one({'_id': ObjectId(course['teacher_id'])})
         if teacher:
             course['teacher_name'] = teacher['name']
             course['teacher_email'] = teacher['email']
         
-        # Get materials
-        materials = list(db.materials.find({'course_id': course_id}))
+        # Get modules sorted by order field (Requirement 5.5)
+        modules = list(db.modules.find({'course_id': course_id}).sort('order', 1))
+        for module in modules:
+            module['_id'] = str(module['_id'])
+            module_id = module['_id']
+            
+            # Get materials for this module sorted by order field (Requirement 5.6)
+            module_materials = list(db.materials.find({'module_id': module_id}).sort('order', 1))
+            for material in module_materials:
+                material['_id'] = str(material['_id'])
+            module['materials'] = module_materials
+        
+        course['modules'] = modules
+        
+        # Also get all materials for backward compatibility
+        materials = list(db.materials.find({'course_id': course_id}).sort('order', 1))
         for material in materials:
             material['_id'] = str(material['_id'])
         course['materials'] = materials
@@ -238,6 +268,12 @@ def create_course():
                 return jsonify({'error': f'{field} is required'}), 400
         
         # Create course with validated data
+        # Handle thumbnail - use provided thumbnail or default
+        thumbnail_url = validated_data.get('thumbnail', '')
+        if not thumbnail_url or thumbnail_url.startswith('data:image'):
+            # If no thumbnail or base64 provided, use default
+            thumbnail_url = 'https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg?auto=compress&cs=tinysrgb&w=400'
+        
         course_data = {
             **validated_data,
             'teacher_id': user_id,
@@ -245,7 +281,7 @@ def create_course():
             'duration': validated_data.get('duration', ''),
             'prerequisites': validated_data.get('prerequisites', []),
             'learning_objectives': validated_data.get('learning_objectives', []),
-            'thumbnail': validated_data.get('thumbnail', ''),
+            'thumbnail': thumbnail_url,
             'is_active': True,
             'is_public': validated_data.get('is_public', True),
             'max_students': validated_data.get('max_students', 0),  # 0 means unlimited
@@ -257,16 +293,40 @@ def create_course():
         course_id = str(result.inserted_id)
         
         # Process modules and create materials
+        # Requirement 5.2: Store module metadata (title, order, description) to the database
+        # Requirement 5.3: Store material metadata (type, filename, file_path, title) to the database
+        # Requirement 3.4: Store video_id in content field and set type to 'video'
         modules = data.get('modules', [])
-        for module in modules:
+        for module_index, module in enumerate(modules):
+            # Create module record with metadata
+            module_data = {
+                'course_id': course_id,
+                'title': module.get('title', f'Module {module_index + 1}'),
+                'description': module.get('description', ''),
+                'order': module_index + 1,
+                'created_at': datetime.utcnow()
+            }
+            module_result = db.modules.insert_one(module_data)
+            module_id = str(module_result.inserted_id)
+            
+            # Create materials for this module
             for lesson in module.get('lessons', []):
                 if lesson.get('content') and lesson.get('title'):
+                    # Determine material type based on content or explicit type
+                    material_type = lesson.get('type', 'video')
+                    
+                    # Ensure type is set to 'video' for video materials
+                    # Video content will be a video_id (ObjectId string)
+                    if material_type == 'video' or (not lesson.get('type') and lesson.get('content')):
+                        material_type = 'video'
+                    
                     material_data = {
                         'course_id': course_id,
+                        'module_id': module_id,
                         'title': lesson['title'],
                         'description': lesson.get('description', ''),
-                        'type': lesson.get('type', 'video'),
-                        'content': lesson['content'],  # This is the video ID
+                        'type': material_type,  # Ensure type is 'video' for video materials
+                        'content': lesson['content'],  # Store video_id in content field
                         'order': lesson.get('order', 0),
                         'is_required': lesson.get('is_required', False),
                         'uploaded_by': user_id,
@@ -534,12 +594,25 @@ def upload_video(course_id):
 @courses_bp.route('/videos/<filename>', methods=['GET'])
 @jwt_required()
 def serve_video(filename):
+    """
+    Serve video file with authorization check
+    Implements Requirements 6.3, 6.4, 6.7
+    """
     try:
         user_id = get_jwt_identity()
         db = current_app.db
         
+        # Requirement 6.7: Validate file path to prevent directory traversal
+        try:
+            validate_file_path(filename)
+        except ValidationError as e:
+            current_app.logger.warning(f"Invalid video filename: {filename}")
+            return jsonify({'error': 'Invalid file path'}), 400
+        
         # Find the video material
         video = db.materials.find_one({'filename': filename, 'type': 'video'})
+        
+        # Requirement 6.4: Return 404 for non-existent files
         if not video:
             return jsonify({'error': 'Video not found'}), 404
         
@@ -555,6 +628,7 @@ def serve_video(filename):
         if user['role'] == 'teacher' and course['teacher_id'] == user_id:
             has_access = True
         elif user['role'] == 'student':
+            # Requirement 6.3: Check enrollment before serving materials
             enrollment = db.enrollments.find_one({
                 'course_id': video['course_id'],
                 'student_id': user_id
@@ -563,8 +637,15 @@ def serve_video(filename):
         elif user['role'] == 'admin':
             has_access = True
         
+        # Requirement 6.3: Return 403 for unauthorized access
         if not has_access:
-            return jsonify({'error': 'Access denied'}), 403
+            return jsonify({'error': 'Access denied. You must be enrolled in this course.'}), 403
+        
+        # Check if file exists on disk
+        file_path = os.path.join(VIDEO_FOLDER, filename)
+        if not os.path.exists(file_path):
+            current_app.logger.error(f"Video file not found on disk: {filename}")
+            return jsonify({'error': 'Video file not found on server'}), 404
         
         # Increment view count
         db.materials.update_one(
@@ -572,10 +653,158 @@ def serve_video(filename):
             {'$inc': {'views': 1}}
         )
         
+        # Requirement 6.8: Log file access operation
+        current_app.logger.info(f"Video accessed: {filename} by user {user_id}")
+        
         return send_from_directory(VIDEO_FOLDER, filename)
         
     except Exception as e:
+        current_app.logger.error(f"Error serving video {filename}: {str(e)}")
+        return jsonify({'error': 'Failed to serve video'}), 500
+
+@courses_bp.route('/upload-thumbnail', methods=['POST'])
+@jwt_required()
+def upload_thumbnail():
+    """Upload course thumbnail image"""
+    try:
+        user_id = get_jwt_identity()
+        db = current_app.db
+        
+        # Check if user is teacher or admin
+        user = db.users.find_one({'_id': ObjectId(user_id)})
+        if user['role'] not in ['teacher', 'admin']:
+            return jsonify({'error': 'Only teachers and admins can upload thumbnails'}), 403
+        
+        # Check if file is present
+        if 'thumbnail' not in request.files:
+            return jsonify({'error': 'No thumbnail file provided'}), 400
+        
+        file = request.files['thumbnail']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Validate file type (JPEG, PNG, GIF, WebP)
+        allowed_extensions = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
+        if not ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+            # Requirement 6.8: Log validation failure
+            log_file_validation_failure(
+                user_id=user_id,
+                filename=file.filename,
+                reason=f'Invalid file type. Allowed: {", ".join(allowed_extensions)}',
+                file_type='thumbnail'
+            )
+            return jsonify({
+                'error': f'Invalid image file format. Allowed types: {", ".join(allowed_extensions)}'
+            }), 400
+        
+        # Get file extension
+        file_extension = file.filename.rsplit('.', 1)[1].lower()
+        
+        # Validate file size (max 5MB)
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)  # Reset file pointer
+        
+        max_size_mb = 5
+        max_size_bytes = max_size_mb * 1024 * 1024
+        if file_size > max_size_bytes:
+            # Requirement 6.8: Log validation failure
+            log_file_validation_failure(
+                user_id=user_id,
+                filename=file.filename,
+                reason=f'File size {file_size} bytes exceeds {max_size_mb}MB limit',
+                file_type='thumbnail'
+            )
+            return jsonify({
+                'error': f'File size exceeds maximum allowed size of {max_size_mb}MB'
+            }), 413
+        
+        # Create thumbnails directory if it doesn't exist
+        thumbnails_folder = os.path.join(UPLOAD_FOLDER, 'thumbnails')
+        os.makedirs(thumbnails_folder, exist_ok=True)
+        
+        # Generate unique filename using UUID + timestamp
+        unique_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        unique_filename = f"{unique_id}_{timestamp}.{file_extension}"
+        file_path = os.path.join(thumbnails_folder, unique_filename)
+        
+        # Save file
+        file.save(file_path)
+        
+        # Requirement 6.8: Log file upload operation with user ID, file path, and timestamp
+        log_file_upload(
+            user_id=user_id,
+            file_path=file_path,
+            file_size=file_size,
+            file_type='thumbnail',
+            operation_type='upload'
+        )
+        
+        # Return URL path
+        thumbnail_url = f'/api/courses/thumbnails/{unique_filename}'
+        
+        return jsonify({
+            'message': 'Thumbnail uploaded successfully',
+            'thumbnailUrl': thumbnail_url,
+            'filename': unique_filename,
+            'size': file_size
+        }), 201
+        
+    except Exception as e:
+        # Requirement 6.8: Log errors with full stack traces
+        log_file_error(
+            user_id=user_id if 'user_id' in locals() else 'unknown',
+            file_path=file.filename if 'file' in locals() and file else 'unknown',
+            error_message=str(e),
+            file_type='thumbnail',
+            operation_type='upload'
+        )
         return jsonify({'error': str(e)}), 500
+
+@courses_bp.route('/thumbnails/<filename>', methods=['GET'])
+def serve_thumbnail(filename):
+    """
+    Serve course thumbnail image
+    Implements Requirements 6.4, 6.7, 6.8
+    """
+    try:
+        # Requirement 6.7: Validate file path to prevent directory traversal
+        try:
+            validate_file_path(filename)
+        except ValidationError as e:
+            current_app.logger.warning(f"Invalid thumbnail filename: {filename}")
+            return jsonify({'error': 'Invalid file path'}), 400
+        
+        thumbnails_folder = os.path.join(UPLOAD_FOLDER, 'thumbnails')
+        file_path = os.path.join(thumbnails_folder, filename)
+        
+        # Requirement 6.4: Return 404 for non-existent files
+        if not os.path.exists(file_path):
+            current_app.logger.error(f"Thumbnail file not found: {filename}")
+            return jsonify({'error': 'Thumbnail not found'}), 404
+        
+        # Requirement 6.8: Log file access operation
+        # Note: For thumbnails, we don't require authentication, so user_id may be 'anonymous'
+        log_file_access(
+            user_id='anonymous',
+            file_path=file_path,
+            file_type='thumbnail',
+            operation_type='access'
+        )
+        
+        return send_from_directory(thumbnails_folder, filename)
+    except Exception as e:
+        # Requirement 6.8: Log errors with full stack traces
+        log_file_error(
+            user_id='anonymous',
+            file_path=filename,
+            error_message=str(e),
+            file_type='thumbnail',
+            operation_type='access'
+        )
+        current_app.logger.error(f"Error serving thumbnail {filename}: {str(e)}")
+        return jsonify({'error': 'Failed to serve thumbnail'}), 500
 
 @courses_bp.route('/<course_id>/materials', methods=['POST'])
 @jwt_required()
@@ -607,11 +836,29 @@ def upload_material(course_id):
             if field not in validated_data:
                 return jsonify({'error': f'{field} is required'}), 400
         
+        # Requirement 3.4: Ensure material.type is set to 'video' for video materials
+        # and video_id is stored in content field
+        material_type = validated_data.get('type', 'video')
+        content = validated_data.get('content', '')
+        
+        # If type is 'video', ensure content contains video_id
+        if material_type == 'video':
+            # Content should be a video_id (ObjectId string)
+            # Validate that the video exists
+            try:
+                video = db.videos.find_one({'_id': ObjectId(content)})
+                if not video:
+                    return jsonify({'error': 'Video not found'}), 404
+            except:
+                return jsonify({'error': 'Invalid video ID'}), 400
+        
         # Create material with validated data
         material_data = {
             'course_id': course_id,
-            **validated_data,
+            'title': validated_data.get('title'),
             'description': validated_data.get('description', ''),
+            'type': material_type,  # Ensure type is 'video' for video materials
+            'content': content,  # Store video_id in content field
             'order': validated_data.get('order', 0),
             'is_required': validated_data.get('is_required', False),
             'uploaded_by': user_id,

@@ -283,6 +283,28 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId }) 
     }
   };
 
+  // Initialize progress on first visit
+  const initializeProgress = async (courseId: string) => {
+    try {
+      const token = getAuthToken();
+      if (!token) return;
+
+      const response = await fetch(`http://localhost:5000/api/progress/course/${courseId}/start`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        console.log('Progress initialized for course:', courseId);
+      }
+    } catch (error) {
+      console.error('Failed to initialize progress:', error);
+    }
+  };
+
   useEffect(() => {
     const fetchCourseData = async () => {
       try {
@@ -353,23 +375,47 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId }) 
             setCourseProgress(progressData);
           }
 
-          // Transform materials to modules
+          // Transform modules (now properly structured from backend with sorting)
           const completedMaterials = progressData?.materials?.completed_ids || [];
-          const transformedModules: CourseModule[] = course.materials?.map((material: any, index: number) => ({
-            id: material._id,
-            title: material.title,
-            description: material.description || `Module ${index + 1}`,
-            duration: material.duration || '10 min',
-            completed: completedMaterials.includes(material._id),
-            type: material.type === 'video' ? 'video' : 'reading',
-            materials: [{
-              id: material.content || material._id, // Use content field which contains the video ID
+          
+          // Use course.modules if available (properly sorted by backend), otherwise fall back to materials
+          let transformedModules: CourseModule[] = [];
+          
+          if (course.modules && course.modules.length > 0) {
+            // Backend returns modules with materials already sorted
+            transformedModules = course.modules.map((module: any) => ({
+              id: module._id,
+              title: module.title,
+              description: module.description || '',
+              duration: module.duration || '10 min',
+              completed: completedMaterials.includes(module._id),
+              type: 'video', // Default type
+              materials: module.materials?.map((material: any) => ({
+                id: material.content || material._id,
+                title: material.title,
+                type: material.type,
+                url: material.content || material.file_path || material.url,
+                size: material.file_size
+              })) || []
+            }));
+          } else if (course.materials) {
+            // Fallback: Transform materials to modules (for backward compatibility)
+            transformedModules = course.materials.map((material: any, index: number) => ({
+              id: material._id,
               title: material.title,
-              type: material.type,
-              url: material.content || material.file_path || material.url,
-              size: material.file_size
-            }]
-          })) || [];
+              description: material.description || `Module ${index + 1}`,
+              duration: material.duration || '10 min',
+              completed: completedMaterials.includes(material._id),
+              type: material.type === 'video' ? 'video' : 'reading',
+              materials: [{
+                id: material.content || material._id,
+                title: material.title,
+                type: material.type,
+                url: material.content || material.file_path || material.url,
+                size: material.file_size
+              }]
+            }));
+          }
 
           // Transform assignments
           const transformedAssignments: Assignment[] = course.assignments?.map((assignment: any) => ({
@@ -425,6 +471,11 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId }) 
 
           if (videoMaterialIds.length > 0) {
             await fetchVideoProgress(videoMaterialIds);
+          }
+
+          // Initialize progress on first visit (if not already started)
+          if (courseId && (!progressData || !progressData.started)) {
+            await initializeProgress(courseId);
           }
         } else {
           console.error('Failed to fetch course data');
@@ -855,6 +906,7 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId }) 
                         <div className="flex items-center gap-3 flex-1">
                           {material.type === 'video' && <Video className="h-4 w-4 text-blue-600" />}
                           {material.type === 'pdf' && <FileText className="h-4 w-4 text-red-600" />}
+                          {material.type === 'document' && <FileText className="h-4 w-4 text-purple-600" />}
                           {material.type === 'link' && <Link className="h-4 w-4 text-green-600" />}
                           <div className="flex-1">
                             <p className="font-medium text-gray-900">{material.title}</p>
@@ -883,9 +935,61 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId }) 
                               Play
                             </button>
                           )}
-                          <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">
-                            <Download className="h-4 w-4" />
-                          </button>
+                          {(material.type === 'document' || material.type === 'pdf') && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const token = getAuthToken();
+                                  if (!token) {
+                                    setToast({ type: 'error', message: 'Please login to download documents' });
+                                    return;
+                                  }
+
+                                  // Download document from API
+                                  const response = await fetch(`http://localhost:5000/api/documents/${material.id}`, {
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`
+                                    }
+                                  });
+
+                                  if (response.ok) {
+                                    // Get filename from Content-Disposition header or use default
+                                    const contentDisposition = response.headers.get('Content-Disposition');
+                                    let filename = 'document';
+                                    if (contentDisposition) {
+                                      const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+                                      if (filenameMatch) {
+                                        filename = filenameMatch[1];
+                                      }
+                                    }
+
+                                    // Create blob and download
+                                    const blob = await response.blob();
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = filename;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    window.URL.revokeObjectURL(url);
+                                    document.body.removeChild(a);
+
+                                    setToast({ type: 'success', message: 'Document downloaded successfully' });
+                                  } else {
+                                    const error = await response.json();
+                                    setToast({ type: 'error', message: error.error || 'Failed to download document' });
+                                  }
+                                } catch (error) {
+                                  console.error('Error downloading document:', error);
+                                  setToast({ type: 'error', message: 'Failed to download document' });
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm"
+                            >
+                              <Download className="h-3 w-3" />
+                              Download
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

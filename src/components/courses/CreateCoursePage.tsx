@@ -392,42 +392,71 @@ export const CreateCoursePage: React.FC = () => {
     xhr.send(formData);
   };
 
-  const handleThumbnailUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        const errorMsg = 'Please select a valid image file (JPG, PNG, GIF, WEBP)';
-        setErrors(prev => ({ ...prev, thumbnail: errorMsg }));
-        alert(errorMsg);
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      const errorMsg = 'Please select a valid image file (JPG, PNG, GIF, WEBP)';
+      setErrors(prev => ({ ...prev, thumbnail: errorMsg }));
+      alert(errorMsg);
+      return;
+    }
+    
+    // Validate file size
+    if (!isValidFileSize(file.size, 5)) {
+      const errorMsg = `Image file size must be less than 5MB. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB`;
+      setErrors(prev => ({ ...prev, thumbnail: errorMsg }));
+      alert(errorMsg);
+      return;
+    }
+    
+    // Clear thumbnail error
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors.thumbnail;
+      return newErrors;
+    });
+    
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setThumbnail(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+    
+    // Upload to server
+    try {
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      if (!token) {
+        alert('Please login first');
         return;
       }
       
-      // Validate file size
-      if (!isValidFileSize(file.size, 5)) {
-        const errorMsg = `Image file size must be less than 5MB. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB`;
-        setErrors(prev => ({ ...prev, thumbnail: errorMsg }));
-        alert(errorMsg);
-        return;
-      }
+      const formData = new FormData();
+      formData.append('thumbnail', file);
       
-      // Clear thumbnail error
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors.thumbnail;
-        return newErrors;
+      const response = await fetch('http://localhost:5000/api/courses/upload-thumbnail', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
       });
       
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setThumbnail(e.target?.result as string);
-      };
-      reader.onerror = () => {
-        const errorMsg = 'Failed to read image file. Please try again.';
-        setErrors(prev => ({ ...prev, thumbnail: errorMsg }));
-        alert(errorMsg);
-      };
-      reader.readAsDataURL(file);
+      if (response.ok) {
+        const data = await response.json();
+        // Store the server URL instead of base64
+        setThumbnail(`http://localhost:5000${data.thumbnailUrl}`);
+        console.log('✅ Thumbnail uploaded:', data.thumbnailUrl);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to upload thumbnail: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to upload thumbnail:', error);
+      // Keep the base64 preview even if upload fails
     }
   };
 

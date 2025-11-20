@@ -25,16 +25,17 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    if (!file.type.startsWith('video/')) {
-      setError('Please select a valid video file');
+    // Requirement 6.2: Validate file type with clear error message
+    const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg'];
+    if (!file.type.startsWith('video/') || !allowedTypes.includes(file.type)) {
+      setError(`Invalid file type. Allowed types: MP4, WebM, OGG. Your file type: ${file.type || 'unknown'}`);
       return;
     }
 
-    // Validate file size
+    // Requirement 6.1: Validate file size with clear error message
     const fileSizeMB = file.size / (1024 * 1024);
     if (fileSizeMB > maxSizeMB) {
-      setError(`File size must be less than ${maxSizeMB}MB`);
+      setError(`File size exceeds maximum allowed size of ${maxSizeMB}MB. Your file size: ${fileSizeMB.toFixed(2)}MB`);
       return;
     }
 
@@ -100,11 +101,25 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({
           setError('Upload completed but failed to parse response');
         }
       } else {
+        // Requirement 6.1, 6.2: Show user-friendly error messages
         try {
           const errorData = JSON.parse(xhr.responseText);
-          setError(errorData.error || `Upload failed with status ${xhr.status}`);
+          let errorMessage = errorData.error || `Upload failed with status ${xhr.status}`;
+          
+          // Add specific guidance based on error code
+          if (xhr.status === 413) {
+            errorMessage += '. Please reduce the file size or compress the video.';
+          } else if (xhr.status === 400) {
+            errorMessage += '. Please check the file format and try again.';
+          } else if (xhr.status === 403) {
+            errorMessage += '. You may not have permission to upload videos.';
+          } else if (xhr.status === 401) {
+            errorMessage += '. Please log in again.';
+          }
+          
+          setError(errorMessage);
         } catch {
-          setError(`Upload failed with status ${xhr.status}`);
+          setError(`Upload failed with status ${xhr.status}. Please try again.`);
         }
       }
       setUploading(false);

@@ -34,12 +34,49 @@ export const StudentDashboard: React.FC = () => {
   const [learningPath, setLearningPath] = useState<any>(null);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [loadingLearningPath, setLoadingLearningPath] = useState(false);
+  const [courseProgressStates, setCourseProgressStates] = useState<Record<string, boolean>>({});
 
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
+  };
+
+  // Fetch progress state for all enrolled courses
+  const fetchCourseProgressStates = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const progressStates: Record<string, boolean> = {};
+
+      // Fetch progress for each enrolled course
+      for (const course of courses) {
+        try {
+          const response = await fetch(`http://localhost:5000/api/progress/course/${course.id}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            progressStates[course.id] = data.progress?.started || false;
+          } else {
+            progressStates[course.id] = false;
+          }
+        } catch (error) {
+          console.error(`Failed to fetch progress for course ${course.id}:`, error);
+          progressStates[course.id] = false;
+        }
+      }
+
+      setCourseProgressStates(progressStates);
+    } catch (error) {
+      console.error('Failed to fetch course progress states:', error);
+    }
   };
 
   // Function to fetch AI recommendations
@@ -147,6 +184,13 @@ export const StudentDashboard: React.FC = () => {
       }
     }
   }, [user]);
+
+  // Fetch progress states when courses are loaded
+  useEffect(() => {
+    if (courses.length > 0) {
+      fetchCourseProgressStates();
+    }
+  }, [courses]);
 
   // Load welcome message when chat opens
   useEffect(() => {
@@ -289,7 +333,11 @@ export const StudentDashboard: React.FC = () => {
             </a>
           </div>
           <div className="space-y-3 sm:space-y-4">
-            {coursesWithProgress.slice(0, 3).map((course) => (
+            {coursesWithProgress.slice(0, 3).map((course) => {
+              const hasStarted = courseProgressStates[course.id] || false;
+              const buttonText = hasStarted ? 'Continue' : 'Start';
+              
+              return (
               <div 
                 key={course.id} 
                 className="bg-white border border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-6 hover:shadow-md transition-shadow cursor-pointer"
@@ -349,12 +397,13 @@ export const StudentDashboard: React.FC = () => {
                     className="bg-blue-600 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
                   >
                     <Play className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden sm:inline">Continue</span>
+                    <span className="hidden sm:inline">{buttonText}</span>
                     <span className="sm:hidden">Go</span>
                   </button>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
 
           {/* Quick Actions */}

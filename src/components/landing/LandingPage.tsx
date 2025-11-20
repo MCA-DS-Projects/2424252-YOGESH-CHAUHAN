@@ -16,7 +16,10 @@ import {
   Shield,
   Sparkles,
   Target,
-  Clock
+  Clock,
+  Rocket,
+  BarChart3,
+  Lightbulb
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -28,28 +31,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
   const features = [
     {
-      icon: Brain,
-      title: 'AI-Powered Learning',
-      description: 'Smart recommendations and personalized learning paths tailored just for you.',
-      color: 'from-blue-500 to-purple-600'
+      icon: Lightbulb,
+      title: 'Intelligent Learning',
+      description: 'AI-driven insights that adapt to your learning style and continuously improve your experience.',
+      color: 'from-amber-500 to-orange-600'
     },
     {
-      icon: BookOpen,
-      title: 'Interactive Courses',
-      description: 'Engaging content with videos, assignments, and hands-on projects.',
-      color: 'from-green-500 to-blue-500'
+      icon: Rocket,
+      title: 'Accelerated Growth',
+      description: 'Fast-track your skills with optimized learning paths and real-time feedback systems.',
+      color: 'from-blue-500 to-cyan-500'
     },
     {
-      icon: TrendingUp,
-      title: 'Track Progress',
-      description: 'Monitor your learning journey with detailed analytics and insights.',
+      icon: BarChart3,
+      title: 'Performance Analytics',
+      description: 'Deep insights into your progress with advanced metrics and improvement recommendations.',
       color: 'from-purple-500 to-pink-500'
     },
     {
-      icon: Award,
-      title: 'Earn Certificates',
-      description: 'Get recognized for your achievements with industry-standard certificates.',
-      color: 'from-yellow-500 to-orange-500'
+      icon: Target,
+      title: 'Goal-Oriented System',
+      description: 'Set, track, and achieve your learning objectives with our systematic approach.',
+      color: 'from-green-500 to-emerald-600'
     }
   ];
 
@@ -65,21 +68,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       name: 'Sarah Johnson',
       role: 'Data Science Student',
       avatar: 'SJ',
-      content: 'EduNexa transformed my learning experience completely!',
+      content: 'LIS helped me improve my grades by 40% in just one semester!',
       rating: 5
     },
     {
       name: 'Michael Chen',
       role: 'Software Engineer',
       avatar: 'MC',
-      content: 'The AI recommendations are incredibly accurate and helpful.',
+      content: 'The systematic approach to learning made complex topics so much easier.',
       rating: 5
     },
     {
       name: 'Emily Rodriguez',
       role: 'Marketing Professional',
       avatar: 'ER',
-      content: 'Perfect balance of flexibility and structured learning.',
+      content: 'EduNexa helped me track and improve my learning outcomes systematically!',
       rating: 5
     }
   ];
@@ -104,7 +107,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">EduNexa</h1>
-                <p className="text-xs text-gray-500">AI-Powered Learning</p>
+                <p className="text-xs text-gray-500">Learning Improved System</p>
               </div>
             </div>
 
@@ -158,27 +161,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <div className="inline-flex items-center px-4 py-2 bg-white/80 backdrop-blur-sm border border-blue-200 text-blue-800 rounded-full text-sm font-medium mb-8 shadow-sm">
-              <Sparkles className="h-4 w-4 mr-2" />
-              AI-Powered Learning Platform
+            <div className="inline-flex items-center px-4 py-2 bg-white/80 backdrop-blur-sm border border-cyan-200 text-cyan-800 rounded-full text-sm font-medium mb-8 shadow-sm">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              Systematic Learning Improvement
             </div>
 
             <h1 className="text-5xl lg:text-7xl font-bold text-gray-900 mb-8 leading-tight">
-              Learn Smarter with
-              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-green-600 bg-clip-text text-transparent block lg:inline"> AI-Powered Education</span>
+              Improve Your Learning
+              <span className="bg-gradient-to-r from-blue-600 via-cyan-600 to-purple-600 bg-clip-text text-transparent block lg:inline"> Systematically</span>
             </h1>
 
             <p className="text-xl lg:text-2xl text-gray-600 mb-12 leading-relaxed max-w-4xl mx-auto">
-              Transform your learning journey with personalized AI recommendations,
-              interactive courses, and real-time progress tracking.
+              Experience measurable improvement in your learning outcomes with our intelligent system 
+              that tracks, analyzes, and optimizes your educational journey.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
               <button
                 onClick={onGetStarted}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-10 py-4 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center justify-center gap-2 text-lg font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-10 py-4 rounded-xl hover:from-blue-700 hover:to-cyan-700 transition-all duration-200 flex items-center justify-center gap-2 text-lg font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-1"
               >
-                Start Learning Free
+                Start Improving Now
                 <ArrowRight className="h-5 w-5" />
               </button>
               <button className="bg-white/80 backdrop-blur-sm border border-gray-200 text-gray-700 px-10 py-4 rounded-xl hover:bg-white transition-all duration-200 flex items-center justify-center gap-2 text-lg font-semibold shadow-lg hover:shadow-xl">
@@ -230,7 +233,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               Why Choose EduNexa?
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Experience the future of education with our innovative features designed for modern learners.
+              A comprehensive system designed to continuously improve your learning outcomes through intelligent tracking and optimization.
             </p>
           </div>
 
@@ -255,10 +258,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-20">
             <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-6">
-              Loved by Students Worldwide
+              Real Results, Real Improvement
             </h2>
             <p className="text-xl text-gray-600">
-              Join thousands who are already learning smarter
+              See how EduNexa has transformed learning outcomes for students worldwide
             </p>
           </div>
 
@@ -297,18 +300,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             </div>
 
             <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-6">
-              Start Learning Today
+              Start Your Improvement Journey
             </h2>
             <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
-              Join thousands of students who are already transforming their careers with AI-powered education.
+              Join thousands of students who are achieving measurable improvements in their learning outcomes with EduNexa.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={onGetStarted}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-10 py-4 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center justify-center gap-2 text-lg font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-10 py-4 rounded-xl hover:from-blue-700 hover:to-cyan-700 transition-all duration-200 flex items-center justify-center gap-2 text-lg font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-1"
               >
-                Get Started Free
+                Begin Improving Today
                 <ArrowRight className="h-5 w-5" />
               </button>
             </div>
@@ -348,7 +351,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               </div>
               <div>
                 <h3 className="text-xl font-bold">EduNexa</h3>
-                <p className="text-sm text-gray-400">AI-Powered Learning</p>
+                <p className="text-sm text-gray-400">Learning Improved System</p>
               </div>
             </div>
 

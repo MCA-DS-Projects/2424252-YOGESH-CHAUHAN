@@ -25,9 +25,10 @@ interface CourseCardProps {
   viewMode?: 'grid' | 'list';
   isTeacher?: boolean;
   onUpdate?: () => void;
+  hasStarted?: boolean;
 }
 
-export const CourseCard: React.FC<CourseCardProps> = ({ course, onClick, viewMode = 'grid', isTeacher = false, onUpdate }) => {
+export const CourseCard: React.FC<CourseCardProps> = ({ course, onClick, viewMode = 'grid', isTeacher = false, onUpdate, hasStarted = false }) => {
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case 'Beginner': return 'bg-green-100 text-green-800';
@@ -37,6 +38,9 @@ export const CourseCard: React.FC<CourseCardProps> = ({ course, onClick, viewMod
     }
   };
 
+  // Determine button text based on hasStarted prop
+  const buttonText = hasStarted ? 'Continue' : 'Start';
+
   return (
     <div
       onClick={onClick}
@@ -45,9 +49,13 @@ export const CourseCard: React.FC<CourseCardProps> = ({ course, onClick, viewMod
       {/* Thumbnail */}
       <div className="relative h-48 overflow-hidden">
         <img
-          src={course.thumbnail}
+          src={course.thumbnail || 'https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg?auto=compress&cs=tinysrgb&w=400'}
           alt={course.title}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = 'https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg?auto=compress&cs=tinysrgb&w=400';
+          }}
         />
         <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
           <Play className="h-12 w-12 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -116,7 +124,17 @@ export const CourseCard: React.FC<CourseCardProps> = ({ course, onClick, viewMod
 
         <div className="flex items-center justify-between">
           <p className="text-sm text-gray-600">by {course.instructor}</p>
-          <span className="text-lg font-bold text-blue-600">{course.progress}%</span>
+          {!isTeacher && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onClick) onClick();
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              {buttonText}
+            </button>
+          )}
         </div>
       </div>
     </div>
