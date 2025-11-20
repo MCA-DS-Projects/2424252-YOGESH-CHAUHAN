@@ -13,6 +13,8 @@ from utils.file_logger import (
     log_file_validation_failure,
     log_file_deletion
 )
+from utils.case_converter import convert_dict_keys_to_camel
+from utils.api_response import error_response, success_response
 
 videos_bp = Blueprint('videos', __name__)
 
@@ -59,12 +61,12 @@ def upload_video():
         
         # Check if file is in request
         if 'video' not in request.files:
-            return jsonify({'error': 'No video file provided'}), 400
+            return error_response('No video file provided', 400)
         
         file = request.files['video']
         
         if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+            return error_response('No file selected', 400)
         
         # Requirement 3.1: Validate file type (MP4, WebM, OGG)
         if not allowed_file(file.filename):
@@ -75,9 +77,10 @@ def upload_video():
                 reason=f'Invalid file type. Allowed: {", ".join(ALLOWED_EXTENSIONS)}',
                 file_type='video'
             )
-            return jsonify({
-                'error': f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'
-            }), 400
+            return error_response(
+                f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}',
+                400
+            )
         
         # Requirement 3.1: Validate file size (max 500MB)
         file.seek(0, os.SEEK_END)
@@ -92,9 +95,10 @@ def upload_video():
                 reason=f'File size {file_size} bytes exceeds 500MB limit',
                 file_type='video'
             )
-            return jsonify({
-                'error': f'File size exceeds maximum allowed size of 500MB'
-            }), 413
+            return error_response(
+                'File size exceeds maximum allowed size of 500MB',
+                413
+            )
         
         # Get additional metadata from form data
         title = request.form.get('title', '')
@@ -145,20 +149,15 @@ def upload_video():
         
         # Return video ID and metadata to frontend
         # Using camelCase for API response (Requirement 7.6)
-        return jsonify({
-            'message': 'Video uploaded successfully',
-            'videoId': video_id,  # camelCase for frontend
-            'video_id': video_id,  # snake_case for backward compatibility
+        response_data = {
+            'video_id': video_id,
             'filename': unique_filename,
-            'originalFilename': secure_filename(file.filename),
-            'original_filename': secure_filename(file.filename),  # backward compatibility
-            'fileSize': file_size,
-            'file_size': file_size,  # backward compatibility
-            'mimeType': mime_type,
-            'mime_type': mime_type,  # backward compatibility
-            'videoUrl': f'/api/videos/{video_id}/stream',
-            'video_url': f'/api/videos/{video_id}/stream'  # backward compatibility
-        }), 201
+            'original_filename': secure_filename(file.filename),
+            'file_size': file_size,
+            'mime_type': mime_type,
+            'video_url': f'/api/videos/{video_id}/stream'
+        }
+        return success_response('Video uploaded successfully', response_data, 201)
         
     except Exception as e:
         # Requirement 6.8: Log errors with full stack traces
@@ -169,7 +168,7 @@ def upload_video():
             file_type='video',
             operation_type='upload'
         )
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @videos_bp.route('/<video_id>/stream', methods=['GET'])
 @jwt_required(optional=True)
@@ -197,14 +196,14 @@ def stream_video(video_id):
                     decoded = decode_token(token)
                     user_id = decoded['sub']
                 except Exception as e:
-                    return jsonify({'error': 'Invalid or expired token'}), 401
+                    return error_response('Invalid or expired token', 401)
             else:
-                return jsonify({'error': 'Authentication required'}), 401
+                return error_response('Authentication required', 401)
         
         # Get video document
         video = db.videos.find_one({'_id': ObjectId(video_id)})
         if not video:
-            return jsonify({'error': 'Video not found'}), 404
+            return error_response('Video not found', 404)
         
         # Requirement 3.6: Implement user authorization check (enrollment verification)
         # Find which course this video belongs to
@@ -216,7 +215,7 @@ def stream_video(video_id):
             # Get user to check role
             user = db.users.find_one({'_id': ObjectId(user_id)})
             if not user:
-                return jsonify({'error': 'User not found'}), 404
+                return error_response('User not found', 404)
             
             # Teachers can access their own videos
             course = db.courses.find_one({'_id': ObjectId(course_id)})
@@ -229,10 +228,10 @@ def stream_video(video_id):
                     'course_id': course_id
                 })
                 if not enrollment:
-                    return jsonify({'error': 'You must be enrolled in this course to access this video'}), 403
+                    return error_response('You must be enrolled in this course to access this video', 403)
             # Admins have access
             elif user.get('role') not in ['admin', 'super_admin']:
-                return jsonify({'error': 'Unauthorized access'}), 403
+                return error_response('Unauthorized access', 403)
         
         # Track view count on video access
         db.videos.update_one(
@@ -254,7 +253,7 @@ def stream_video(video_id):
         # Requirement 6.4: Return 404 for non-existent files
         if not file_path:
             current_app.logger.error(f"Video {video_id} has no file_path in database")
-            return jsonify({'error': 'Video file path not found'}), 404
+            return error_response('Video file path not found', 404)
         
         # Requirement 6.7: Validate file path to prevent directory traversal
         try:
@@ -263,12 +262,12 @@ def stream_video(video_id):
             validate_file_path(filename)
         except ValidationError as e:
             current_app.logger.warning(f"Invalid file path for video {video_id}: {file_path}")
-            return jsonify({'error': 'Invalid file path'}), 400
+            return error_response('Invalid file path', 400)
         
         # Requirement 6.5: Handle missing files with clear error
         if not os.path.exists(file_path):
             current_app.logger.error(f"Video file not found on disk: {file_path}")
-            return jsonify({'error': 'Video file not found on server'}), 404
+            return error_response('Video file not found on server', 404)
         
         # Get file size for range requests
         file_size = os.path.getsize(file_path)
@@ -287,7 +286,7 @@ def stream_video(video_id):
             
             # Ensure valid range
             if start >= file_size or end >= file_size or start > end:
-                return jsonify({'error': 'Invalid range'}), 416
+                return error_response('Invalid range', 416)
             
             # Calculate content length
             content_length = end - start + 1
@@ -342,7 +341,7 @@ def stream_video(video_id):
             operation_type='stream'
         )
         current_app.logger.error(f"Error streaming video {video_id}: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @videos_bp.route('/list', methods=['GET'])
 @jwt_required()
@@ -383,12 +382,12 @@ def list_videos():
                      .skip((page - 1) * limit)
                      .limit(limit))
         
-        # Format response
+        # Format response (using snake_case internally)
         video_list = []
         for video in videos:
             uploader = db.users.find_one({'_id': ObjectId(video['uploaded_by'])}) if 'uploaded_by' in video else None
             video_list.append({
-                'id': str(video['_id']),
+                '_id': str(video['_id']),
                 'filename': video['filename'],
                 'original_filename': video.get('original_filename', ''),
                 'file_size': video.get('file_size', 0),
@@ -399,16 +398,20 @@ def list_videos():
                 'video_url': f'/api/videos/{str(video["_id"])}/stream'
             })
         
-        return jsonify({
+        # Convert to camelCase for API response (Requirement 7.6)
+        response_data = {
             'videos': video_list,
             'total': total,
             'page': page,
             'limit': limit,
-            'totalPages': (total + limit - 1) // limit
-        }), 200
+            'total_pages': (total + limit - 1) // limit
+        }
+        response_camel = convert_dict_keys_to_camel(response_data)
+        
+        return jsonify(response_camel), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @videos_bp.route('/<video_id>', methods=['GET'])
 @jwt_required()
@@ -419,12 +422,12 @@ def get_video(video_id):
         
         video = db.videos.find_one({'_id': ObjectId(video_id)})
         if not video:
-            return jsonify({'error': 'Video not found'}), 404
+            return error_response('Video not found', 404)
         
         uploader = db.users.find_one({'_id': ObjectId(video['uploaded_by'])}) if 'uploaded_by' in video else None
         
-        return jsonify({
-            'id': str(video['_id']),
+        video_data = {
+            '_id': str(video['_id']),
             'filename': video['filename'],
             'original_filename': video.get('original_filename', ''),
             'file_path': video.get('file_path', ''),
@@ -435,10 +438,11 @@ def get_video(video_id):
             'uploader_name': uploader.get('name', 'Unknown') if uploader else 'Unknown',
             'created_at': video['created_at'].isoformat() if 'created_at' in video else None,
             'video_url': f'/api/videos/{video_id}/stream'
-        }), 200
+        }
+        return prepare_api_response(video_data, status_code=200)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @videos_bp.route('/<video_id>', methods=['DELETE'])
 @require_teacher
@@ -450,11 +454,11 @@ def delete_video(video_id):
         
         video = db.videos.find_one({'_id': ObjectId(video_id)})
         if not video:
-            return jsonify({'error': 'Video not found'}), 404
+            return error_response('Video not found', 404)
         
         # Check if user is the uploader
         if video.get('uploaded_by') != user_id:
-            return jsonify({'error': 'You can only delete your own videos'}), 403
+            return error_response('You can only delete your own videos', 403)
         
         # Delete file from filesystem
         file_path = video.get('file_path')
@@ -474,10 +478,10 @@ def delete_video(video_id):
         # Remove references from materials collection
         db.materials.delete_many({'content': video_id, 'type': 'video'})
         
-        return jsonify({'message': 'Video deleted successfully'}), 200
+        return success_response('Video deleted successfully', status_code=200)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @videos_bp.route('/<video_id>', methods=['PUT'])
 @require_teacher
@@ -490,11 +494,11 @@ def update_video(video_id):
         
         video = db.videos.find_one({'_id': ObjectId(video_id)})
         if not video:
-            return jsonify({'error': 'Video not found'}), 404
+            return error_response('Video not found', 404)
         
         # Check if user is the uploader
         if video.get('uploaded_by') != user_id:
-            return jsonify({'error': 'You can only update your own videos'}), 403
+            return error_response('You can only update your own videos', 403)
         
         # Update fields
         update_data = {}
@@ -507,10 +511,10 @@ def update_video(video_id):
                 {'$set': update_data}
             )
         
-        return jsonify({'message': 'Video updated successfully'}), 200
+        return success_response('Video updated successfully', status_code=200)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 # Video Progress Tracking Endpoints
 # Implements Requirement 5.7: Track video watch progress
@@ -532,22 +536,22 @@ def update_video_progress(video_id):
         duration = data.get('duration', 0)
         
         if watch_time < 0:
-            return jsonify({'error': 'Watch time cannot be negative'}), 400
+            return error_response('Watch time cannot be negative', 400)
         
         # Get user to verify they're a student
         user = db.users.find_one({'_id': ObjectId(user_id)})
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            return error_response('User not found', 404)
         
         # Get video to verify it exists
         video = db.videos.find_one({'_id': ObjectId(video_id)})
         if not video:
-            return jsonify({'error': 'Video not found'}), 404
+            return error_response('Video not found', 404)
         
         # Find which course this video belongs to
         material = db.materials.find_one({'content': video_id, 'type': 'video'})
         if not material:
-            return jsonify({'error': 'Video not linked to any course material'}), 404
+            return error_response('Video not linked to any course material', 404)
         
         course_id = material.get('course_id')
         
@@ -558,7 +562,7 @@ def update_video_progress(video_id):
                 'course_id': course_id
             })
             if not enrollment:
-                return jsonify({'error': 'Not enrolled in this course'}), 403
+                return error_response('Not enrolled in this course', 403)
         
         # Calculate completion status (>80% watched = completed)
         completed = False
@@ -609,15 +613,15 @@ def update_video_progress(video_id):
         if completed:
             _update_course_progress(db, user_id, course_id)
         
-        return jsonify({
-            'message': 'Video progress updated',
-            'watchTime': watch_time,
+        progress_data = {
+            'watch_time': watch_time,
             'completed': completed
-        }), 200
+        }
+        return success_response('Video progress updated', progress_data, 200)
         
     except Exception as e:
         current_app.logger.error(f"Error updating video progress: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @videos_bp.route('/<video_id>/progress', methods=['GET'])
 @jwt_required()
@@ -636,26 +640,24 @@ def get_video_progress(video_id):
         })
         
         if not video_progress:
-            return jsonify({
-                'progress': {
-                    'videoId': video_id,
-                    'watchTime': 0,
-                    'completed': False,
-                    'lastWatched': None
-                }
-            }), 200
-        
-        return jsonify({
-            'progress': {
-                'videoId': video_id,
-                'watchTime': video_progress.get('watch_time', 0),
-                'completed': video_progress.get('completed', False),
-                'lastWatched': video_progress.get('last_watched').isoformat() if video_progress.get('last_watched') else None
+            default_progress = {
+                'video_id': video_id,
+                'watch_time': 0,
+                'completed': False,
+                'last_watched': None
             }
-        }), 200
+            return prepare_api_response({'progress': default_progress}, status_code=200)
+        
+        progress_data = {
+            'video_id': video_id,
+            'watch_time': video_progress.get('watch_time', 0),
+            'completed': video_progress.get('completed', False),
+            'last_watched': video_progress.get('last_watched').isoformat() if video_progress.get('last_watched') else None
+        }
+        return prepare_api_response({'progress': progress_data}, status_code=200)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 def _update_course_progress(db, student_id, course_id):
     """
@@ -712,6 +714,20 @@ def _update_course_progress(db, student_id, course_id):
                 }
             },
             upsert=True
+        )
+        
+        # IMPORTANT: Also update enrollment record to keep progress in sync
+        db.enrollments.update_one(
+            {
+                'student_id': student_id,
+                'course_id': course_id
+            },
+            {
+                '$set': {
+                    'progress': round(overall_progress, 2),
+                    'updated_at': datetime.utcnow()
+                }
+            }
         )
         
     except Exception as e:

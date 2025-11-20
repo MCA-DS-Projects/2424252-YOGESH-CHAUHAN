@@ -21,7 +21,6 @@ from routes.analytics import analytics_bp
 from routes.learner_analytics import learner_analytics_bp
 from routes.notifications import notifications_bp
 from routes.notification_settings import notification_settings_bp
-from routes.test_users import test_users_bp
 from routes.videos import videos_bp
 from routes.documents import documents_bp
 from routes.progress import progress_bp
@@ -156,7 +155,6 @@ app.register_blueprint(analytics_bp, url_prefix='/api/analytics')
 app.register_blueprint(learner_analytics_bp, url_prefix='/api/learner-analytics')
 app.register_blueprint(notifications_bp, url_prefix='/api')
 app.register_blueprint(notification_settings_bp, url_prefix='/api')
-app.register_blueprint(test_users_bp, url_prefix='/api')
 app.register_blueprint(videos_bp, url_prefix='/api/videos')
 app.register_blueprint(documents_bp, url_prefix='/api/documents')
 app.register_blueprint(progress_bp, url_prefix='/api/progress')

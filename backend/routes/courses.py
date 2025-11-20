@@ -20,6 +20,8 @@ from utils.file_logger import (
     log_file_error,
     log_file_validation_failure
 )
+from utils.case_converter import convert_dict_keys_to_camel
+from utils.api_response import error_response, success_response, prepare_api_response
 
 courses_bp = Blueprint('courses', __name__)
 
@@ -47,7 +49,7 @@ def get_courses():
         # Get user to check role
         user = db.users.find_one({'_id': ObjectId(user_id)})
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            return error_response('User not found', 404)
         
         # Build query based on user role
         query = {}
@@ -162,10 +164,11 @@ def get_courses():
                     course['enrollment_date'] = enrollment['enrolled_at']
                     course['progress'] = enrollment.get('progress', 0)
         
-        return jsonify({'courses': courses}), 200
+        # Convert to camelCase for API response
+        return prepare_api_response({'courses': courses}, status_code=200)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @courses_bp.route('/<course_id>', methods=['GET'])
 @jwt_required()
@@ -177,7 +180,7 @@ def get_course(course_id):
         # Get course
         course = db.courses.find_one({'_id': ObjectId(course_id)})
         if not course:
-            return jsonify({'error': 'Course not found'}), 404
+            return error_response('Course not found', 404)
         
         # Get user to check permissions
         user = db.users.find_one({'_id': ObjectId(user_id)})
@@ -188,10 +191,17 @@ def get_course(course_id):
                 'course_id': course_id,
                 'student_id': user_id
             })
+            
+            # Debug logging for troubleshooting
+            current_app.logger.info(f"Student {user_id} accessing course {course_id}")
+            current_app.logger.info(f"Enrollment found: {enrollment is not None}")
+            
             if not enrollment and not course.get('is_public', False):
-                return jsonify({'error': 'Access denied'}), 403
+                # Log the issue for debugging
+                current_app.logger.warning(f"Access denied for student {user_id} to course {course_id} - Not enrolled")
+                return error_response('Access denied - You are not enrolled in this course', 403)
         elif user['role'] == 'teacher' and course['teacher_id'] != user_id:
-            return jsonify({'error': 'Access denied'}), 403
+            return error_response('Access denied', 403)
         
         # Convert ObjectId to string
         course['_id'] = str(course['_id'])
@@ -236,10 +246,11 @@ def get_course(course_id):
 
 
         
-        return jsonify({'course': course}), 200
+        # Convert to camelCase for API response
+        return prepare_api_response({'course': course}, status_code=200)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @courses_bp.route('/', methods=['POST'])
 @jwt_required()
@@ -251,7 +262,7 @@ def create_course():
         # Check if user is teacher or admin
         user = db.users.find_one({'_id': ObjectId(user_id)})
         if user['role'] not in ['teacher', 'admin']:
-            return jsonify({'error': 'Only teachers and admins can create courses'}), 403
+            return error_response('Only teachers and admins can create courses', 403)
         
         data = request.get_json()
         

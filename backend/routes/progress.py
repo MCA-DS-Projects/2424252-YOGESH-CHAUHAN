@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from bson import ObjectId
 from datetime import datetime
+from utils.api_response import error_response, success_response, prepare_api_response
+from utils.case_converter import convert_dict_keys_to_camel
 
 progress_bp = Blueprint('progress', __name__)
 
@@ -16,7 +18,7 @@ def get_course_progress(course_id):
         # Check if user is student
         user = db.users.find_one({'_id': ObjectId(user_id)})
         if not user or user['role'] != 'student':
-            return jsonify({'error': 'Only students can view progress'}), 403
+            return error_response('Only students can view progress', 403)
         
         # Get or create progress record
         progress = db.progress.find_one({
@@ -26,16 +28,15 @@ def get_course_progress(course_id):
         
         # If no progress record exists, return default state
         if not progress:
-            return jsonify({
-                'progress': {
-                    'course_id': course_id,
-                    'student_id': user_id,
-                    'started': False,
-                    'last_accessed': None,
-                    'overall_progress': 0,
-                    'completed_materials': []
-                }
-            }), 200
+            default_progress = {
+                'course_id': course_id,
+                'student_id': user_id,
+                'started': False,
+                'last_accessed': None,
+                'overall_progress': 0,
+                'completed_materials': []
+            }
+            return prepare_api_response({'progress': default_progress}, status_code=200)
         
         # Convert ObjectId to string
         progress['_id'] = str(progress['_id'])
@@ -48,10 +49,10 @@ def get_course_progress(course_id):
         if progress.get('updated_at'):
             progress['updated_at'] = progress['updated_at'].isoformat()
         
-        return jsonify({'progress': progress}), 200
+        return prepare_api_response({'progress': progress}, status_code=200)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @progress_bp.route('/course/<course_id>/start', methods=['POST'])
 @jwt_required()
@@ -64,12 +65,12 @@ def start_course(course_id):
         # Check if user is student
         user = db.users.find_one({'_id': ObjectId(user_id)})
         if not user or user['role'] != 'student':
-            return jsonify({'error': 'Only students can start courses'}), 403
+            return error_response('Only students can start courses', 403)
         
         # Check if course exists
         course = db.courses.find_one({'_id': ObjectId(course_id)})
         if not course:
-            return jsonify({'error': 'Course not found'}), 404
+            return error_response('Course not found', 404)
         
         # Check if student is enrolled
         enrollment = db.enrollments.find_one({
@@ -78,7 +79,7 @@ def start_course(course_id):
         })
         
         if not enrollment:
-            return jsonify({'error': 'Not enrolled in this course'}), 403
+            return error_response('Not enrolled in this course', 403)
         
         # Check if progress record already exists
         existing_progress = db.progress.find_one({
@@ -101,15 +102,13 @@ def start_course(course_id):
                 }
             )
             
-            return jsonify({
-                'message': 'Progress updated',
-                'progress': {
-                    'course_id': course_id,
-                    'student_id': user_id,
-                    'started': True,
-                    'last_accessed': current_time.isoformat()
-                }
-            }), 200
+            progress_data = {
+                'course_id': course_id,
+                'student_id': user_id,
+                'started': True,
+                'last_accessed': current_time.isoformat()
+            }
+            return success_response('Progress updated', {'progress': progress_data}, 200)
         else:
             # Create new progress record
             progress_data = {
@@ -129,10 +128,21 @@ def start_course(course_id):
             progress_data['created_at'] = current_time.isoformat()
             progress_data['updated_at'] = current_time.isoformat()
             
-            return jsonify({
-                'message': 'Progress initialized',
-                'progress': progress_data
-            }), 201
+            # IMPORTANT: Also initialize progress in enrollment record
+            db.enrollments.update_one(
+                {
+                    'student_id': user_id,
+                    'course_id': course_id
+                },
+                {
+                    '$set': {
+                        'progress': 0,
+                        'updated_at': current_time
+                    }
+                }
+            )
+            
+            return success_response('Progress initialized', {'progress': progress_data}, 201)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)

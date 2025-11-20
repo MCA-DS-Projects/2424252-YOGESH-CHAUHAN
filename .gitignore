@@ -1,12 +1,15 @@
 # Dependencies
 node_modules
+frontend/node_modules
 
 # Environment variables (contains sensitive credentials)
 .env
 backend/.env
+frontend/.env
 *.env
 !.env.example
 !backend/.env.example
+!frontend/.env.example
 
 # Python cache
 __pycache__/
@@ -33,6 +36,7 @@ Thumbs.db
 
 # Build outputs
 dist/
+frontend/dist/
 build/
 *.egg-info/
 
@@ -50,3 +54,6 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
+.hypothesis/
+backend/.pytest_cache/
+backend/.hypothesis/
