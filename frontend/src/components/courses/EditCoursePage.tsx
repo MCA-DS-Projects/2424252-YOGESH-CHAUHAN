@@ -82,8 +82,8 @@ export const EditCoursePage: React.FC<EditCoursePageProps> = ({ courseId }) => {
         setIsPublic(course.is_public);
         setIsActive(course.is_active);
         setMaxStudents(course.max_students?.toString() || '50');
-        setPrerequisites(course.prerequisites.length > 0 ? course.prerequisites : ['']);
-        setLearningObjectives(course.learning_objectives.length > 0 ? course.learning_objectives : ['']);
+        setPrerequisites(course.prerequisites && course.prerequisites.length > 0 ? course.prerequisites : ['']);
+        setLearningObjectives(course.learning_objectives && course.learning_objectives.length > 0 ? course.learning_objectives : ['']);
         
       } catch (err: any) {
         console.error('Failed to load course:', err);

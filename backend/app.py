@@ -29,6 +29,7 @@ from routes.discussions import discussions_bp
 from routes.schedule import schedule_bp
 from routes.achievements import achievements_bp
 
+
 # Import error handler
 from utils.error_handler import register_error_handlers
 
@@ -162,6 +163,7 @@ app.register_blueprint(student_progress_bp, url_prefix='/api/student-progress')
 app.register_blueprint(discussions_bp, url_prefix='/api/discussions')
 app.register_blueprint(schedule_bp, url_prefix='/api/schedule')
 app.register_blueprint(achievements_bp, url_prefix='/api/achievements')
+
 
 # Register error handlers
 register_error_handlers(app)

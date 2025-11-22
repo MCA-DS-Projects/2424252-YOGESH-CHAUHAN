@@ -42,41 +42,57 @@ export const SchedulePage: React.FC = () => {
   const fetchEvents = async () => {
     try {
       setError(null);
+      setLoading(true);
       const data = await ScheduleAPI.getEvents();
       
-      // Convert assignments to schedule events
+      console.log('Fetched events from backend:', data); // Debug log
+      
+      // Convert assignments to schedule events with better formatting
       const assignmentEvents: CalendarEvent[] = assignments.map(assignment => {
         const dueDate = new Date(assignment.dueDate);
         const dateStr = dueDate.toISOString().split('T')[0];
+        const today = new Date();
+        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         
         // Find course title
         const course = courses.find(c => c.id === assignment.courseId);
+        const courseTitle = course?.title || 'Unknown Course';
         
-        // Determine color based on status
+        // Determine color based on status and urgency
         let color = 'bg-red-500'; // Default for pending
         if (assignment.status === 'graded') {
           color = 'bg-green-500';
         } else if (assignment.status === 'submitted') {
           color = 'bg-yellow-500';
+        } else if (daysUntilDue <= 1 && daysUntilDue >= 0) {
+          color = 'bg-red-600'; // Urgent - due today or tomorrow
+        } else if (daysUntilDue <= 3 && daysUntilDue > 1) {
+          color = 'bg-orange-500'; // Due soon
         }
         
-        // Add status to description
+        // Add detailed status to description
         const statusText = assignment.status === 'pending' ? 'Not Submitted' : 
                           assignment.status === 'submitted' ? 'Submitted - Awaiting Grade' :
                           `Graded: ${assignment.grade || 'N/A'}`;
         
-        const fullDescription = `${assignment.description}\n\nStatus: ${statusText}`;
+        const urgencyText = daysUntilDue < 0 ? '⚠️ OVERDUE' :
+                           daysUntilDue === 0 ? '🔥 DUE TODAY' :
+                           daysUntilDue === 1 ? '⏰ DUE TOMORROW' :
+                           daysUntilDue <= 3 ? `📅 Due in ${daysUntilDue} days` :
+                           `📅 Due in ${daysUntilDue} days`;
+        
+        const fullDescription = `📚 Course: ${courseTitle}\n\n${assignment.description}\n\n📊 Status: ${statusText}\n${urgencyText}`;
         
         return {
           id: `assignment-${assignment.id}`,
-          title: assignment.title,
+          title: `📝 ${assignment.title}`,
           description: fullDescription,
           type: 'deadline' as const,
           date: dateStr,
           startTime: '23:59',
           endTime: '23:59',
           courseId: assignment.courseId,
-          courseTitle: course?.title || 'Unknown Course',
+          courseTitle: courseTitle,
           color: color,
           isShared: false,
           createdAt: new Date().toISOString(),
@@ -85,10 +101,13 @@ export const SchedulePage: React.FC = () => {
       });
       
       // Combine user events and assignment events
-      setEvents([...data, ...assignmentEvents]);
+      const allEvents = [...data, ...assignmentEvents];
+      console.log('Total events (user + assignments):', allEvents.length); // Debug log
+      setEvents(allEvents);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load schedule.';
       setError(message);
+      console.error('Error fetching events:', err); // Debug log
     } finally {
       setLoading(false);
     }
@@ -134,17 +153,11 @@ export const SchedulePage: React.FC = () => {
       return;
     }
 
-    const eventColors = {
-      'class': 'bg-blue-500',
-      'meeting': 'bg-purple-500',
-      'deadline': 'bg-red-500',
-      'exam': 'bg-orange-500',
-      'office-hours': 'bg-green-500'
-    };
-
     setCreatingEvent(true);
     try {
-      const created = await ScheduleAPI.createEvent({
+      console.log('Creating event:', newEvent); // Debug log
+      
+      const createdEvent = await ScheduleAPI.createEvent({
         title: newEvent.title,
         description: newEvent.description,
         type: newEvent.type,
@@ -155,7 +168,9 @@ export const SchedulePage: React.FC = () => {
         courseId: newEvent.courseId || undefined
       });
 
-      setEvents(prev => [...prev, { ...created, color: created.color || eventColors[newEvent.type] }]);
+      console.log('Event created successfully:', createdEvent); // Debug log
+
+      // Reset form
       setNewEvent({
         title: '',
         description: '',
@@ -167,11 +182,14 @@ export const SchedulePage: React.FC = () => {
         courseId: ''
       });
       setShowAddEventModal(false);
-      setToast({ type: 'success', message: 'Event added to your schedule.' });
+      setToast({ type: 'success', message: 'Event added successfully! Refreshing calendar...' });
       
-      // Refresh events to include any new assignments
-      fetchEvents();
+      // Refresh all events from backend
+      console.log('Fetching updated events...'); // Debug log
+      await fetchEvents();
+      console.log('Events refreshed'); // Debug log
     } catch (err) {
+      console.error('Error creating event:', err); // Debug log
       const message = err instanceof Error ? err.message : 'Failed to create event.';
       setToast({ type: 'error', message });
     } finally {
@@ -222,6 +240,65 @@ export const SchedulePage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Upcoming Assignments Section */}
+      {!loading && !error && assignments.length > 0 && (
+        <div className="mb-6 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Clock className="h-5 w-5 text-blue-600" />
+            Upcoming Assignments (Next 7 Days)
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {assignments
+              .filter(assignment => {
+                const dueDate = new Date(assignment.dueDate);
+                const today = new Date();
+                const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                return daysUntilDue >= 0 && daysUntilDue <= 7 && assignment.status === 'pending';
+              })
+              .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+              .slice(0, 6)
+              .map(assignment => {
+                const dueDate = new Date(assignment.dueDate);
+                const today = new Date();
+                const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                const course = courses.find(c => c.id === assignment.courseId);
+                
+                const urgencyColor = daysUntilDue === 0 ? 'bg-red-100 border-red-300 text-red-800' :
+                                    daysUntilDue === 1 ? 'bg-orange-100 border-orange-300 text-orange-800' :
+                                    'bg-blue-100 border-blue-300 text-blue-800';
+                
+                const urgencyText = daysUntilDue === 0 ? '🔥 Due Today!' :
+                                   daysUntilDue === 1 ? '⏰ Due Tomorrow' :
+                                   `📅 ${daysUntilDue} days left`;
+                
+                return (
+                  <div key={assignment.id} className={`p-4 rounded-lg border-2 ${urgencyColor}`}>
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-semibold text-sm line-clamp-2">{assignment.title}</h3>
+                      <span className="text-xs font-bold whitespace-nowrap ml-2">{urgencyText}</span>
+                    </div>
+                    <p className="text-xs opacity-75 mb-2">📚 {course?.title || 'Unknown Course'}</p>
+                    <div className="flex items-center justify-between text-xs">
+                      <span>Due: {dueDate.toLocaleDateString()}</span>
+                      <span className="font-medium">23:59</span>
+                    </div>
+                  </div>
+                );
+              })}
+            {assignments.filter(assignment => {
+              const dueDate = new Date(assignment.dueDate);
+              const today = new Date();
+              const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+              return daysUntilDue >= 0 && daysUntilDue <= 7 && assignment.status === 'pending';
+            }).length === 0 && (
+              <div className="col-span-full text-center py-4 text-gray-600">
+                🎉 No pending assignments in the next 7 days!
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-3">

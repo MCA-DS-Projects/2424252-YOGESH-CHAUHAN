@@ -6,7 +6,6 @@ import { GlobalSearch } from '../search/GlobalSearch';
 import { notificationsAPI } from '../../config/api';
 import {
   Bell,
-  MessageSquare,
   LogOut,
   User,
   Menu
@@ -16,7 +15,6 @@ export const Header: React.FC = () => {
   const { user, logout } = useAuth();
   const { setSidebarOpen } = useLMS();
   const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [unreadMessages, setUnreadMessages] = useState(0);
 
   // Fetch unread counts
   useEffect(() => {
@@ -24,10 +22,6 @@ export const Header: React.FC = () => {
       try {
         const notifData = await notificationsAPI.getUnreadCount();
         setUnreadNotifications((notifData as any).unread_count || 0);
-        
-        // TODO: Implement messages API when ready
-        // For now, keep messages at 0
-        setUnreadMessages(0);
       } catch (error) {
         console.error('Failed to fetch unread counts:', error);
       }
@@ -70,16 +64,6 @@ export const Header: React.FC = () => {
             {unreadNotifications > 0 && (
               <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 bg-blue-500 text-white text-[10px] sm:text-xs w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center">
                 {unreadNotifications > 9 ? '9+' : unreadNotifications}
-              </span>
-            )}
-          </a>
-
-          {/* Messages - Hidden on small mobile */}
-          <a href="/messages" className="hidden xs:block relative p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 transition-colors">
-            <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />
-            {unreadMessages > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 bg-green-500 text-white text-[10px] sm:text-xs w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center">
-                {unreadMessages > 9 ? '9+' : unreadMessages}
               </span>
             )}
           </a>

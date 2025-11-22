@@ -45,7 +45,7 @@ def get_users():
         user_id = get_jwt_identity()
         db = current_app.db
 
-        # Check if user is admin or super admin
+        # Check if user is admin or super_admin
         me = db.users.find_one({'_id': to_object_id(user_id)})
         if not me or me.get('role') not in ['admin', 'super_admin']:
             return jsonify({'error': 'Admin access required'}), 403
@@ -103,8 +103,8 @@ def get_user(target_user_id):
         if not target_oid:
             return jsonify({'error': 'Invalid user id'}), 400
 
-        # Only self, admin, or super_admin can view
-        if me.get('role') not in ['admin', 'super_admin'] and user_id != target_user_id:
+        # Only self or admin can view
+        if me.get('role') != 'admin' and user_id != target_user_id:
             return jsonify({'error': 'Access denied'}), 403
 
         target_user = db.users.find_one({'_id': target_oid})
@@ -166,8 +166,8 @@ def update_user(target_user_id):
         if not target_user:
             return jsonify({'error': 'User not found'}), 404
 
-        # Only self or admin/super_admin can update
-        if me.get('role') not in ['admin', 'super_admin'] and user_id != target_user_id:
+        # Only self or admin can update
+        if me.get('role') != 'admin' and user_id != target_user_id:
             return jsonify({'error': 'Access denied'}), 403
 
         data = request.get_json() or {}
@@ -185,7 +185,7 @@ def update_user(target_user_id):
                 if f in data:
                     update_data[f] = data[f]
 
-        if me.get('role') in ['admin', 'super_admin']:
+        if me.get('role') == 'admin':
             for f in admin_updatable:
                 if f in data:
                     update_data[f] = data[f]
@@ -211,7 +211,7 @@ def deactivate_user(target_user_id):
         db = current_app.db
 
         me = db.users.find_one({'_id': to_object_id(user_id)})
-        if not me or me.get('role') not in ['admin', 'super_admin']:
+        if not me or me.get('role') != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
 
         target_oid = to_object_id(target_user_id)
@@ -239,7 +239,7 @@ def activate_user(target_user_id):
         db = current_app.db
 
         me = db.users.find_one({'_id': to_object_id(user_id)})
-        if not me or me.get('role') not in ['admin', 'super_admin']:
+        if not me or me.get('role') != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
 
         target_oid = to_object_id(target_user_id)
@@ -264,7 +264,7 @@ def reset_user_password(target_user_id):
         db = current_app.db
 
         me = db.users.find_one({'_id': to_object_id(user_id)})
-        if not me or me.get('role') not in ['admin', 'super_admin']:
+        if not me or me.get('role') != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
 
         target_oid = to_object_id(target_user_id)
@@ -297,7 +297,7 @@ def bulk_import_users():
         db = current_app.db
 
         me = db.users.find_one({'_id': to_object_id(user_id)})
-        if not me or me.get('role') not in ['admin', 'super_admin']:
+        if not me or me.get('role') != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
 
         data = request.get_json() or {}
@@ -386,7 +386,7 @@ def get_user_statistics():
         db = current_app.db
 
         me = db.users.find_one({'_id': to_object_id(user_id)})
-        if not me or me.get('role') not in ['admin', 'super_admin']:
+        if not me or me.get('role') != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
 
         total_users = db.users.count_documents({})
@@ -428,8 +428,8 @@ def delete_user(target_user_id):
         db = current_app.db
 
         me = db.users.find_one({'_id': to_object_id(user_id)})
-        if not me or me.get('role') != 'super_admin':
-            return jsonify({'error': 'Super Admin access required'}), 403
+        if not me or me.get('role') != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
 
         if user_id == target_user_id:
             return jsonify({'error': 'Cannot delete your own account'}), 400

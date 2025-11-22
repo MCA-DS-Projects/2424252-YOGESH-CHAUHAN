@@ -94,3 +94,100 @@ def create_discussion():
 
     return jsonify({'discussion': _serialize_discussion(discussion_doc)}), 201
 
+
+@discussions_bp.route('/<discussion_id>', methods=['GET'])
+@jwt_required()
+def get_discussion(discussion_id):
+    """Get a single discussion with all replies."""
+    db = current_app.db
+    
+    if not ObjectId.is_valid(discussion_id):
+        return jsonify({'error': 'Invalid discussion ID'}), 400
+    
+    discussion = db.discussions.find_one({'_id': ObjectId(discussion_id)})
+    if not discussion:
+        return jsonify({'error': 'Discussion not found'}), 404
+    
+    # Serialize discussion with replies
+    serialized = _serialize_discussion(discussion)
+    serialized['replies'] = discussion.get('replies', [])
+    
+    return jsonify({'discussion': serialized})
+
+
+@discussions_bp.route('/<discussion_id>/reply', methods=['POST'])
+@jwt_required()
+def add_reply(discussion_id):
+    """Add a reply to a discussion."""
+    db = current_app.db
+    user_id = get_jwt_identity()
+    user = db.users.find_one({'_id': ObjectId(user_id)})
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    if not ObjectId.is_valid(discussion_id):
+        return jsonify({'error': 'Invalid discussion ID'}), 400
+    
+    discussion = db.discussions.find_one({'_id': ObjectId(discussion_id)})
+    if not discussion:
+        return jsonify({'error': 'Discussion not found'}), 404
+    
+    data = request.get_json() or {}
+    content = (data.get('content') or '').strip()
+    
+    if not content:
+        return jsonify({'error': 'Reply content is required'}), 400
+    
+    now = datetime.utcnow()
+    reply = {
+        'id': str(ObjectId()),
+        'author_id': user_id,
+        'author_name': user.get('name', 'User'),
+        'author_role': user.get('role', ''),
+        'content': content,
+        'created_at': now.isoformat(),
+        'likes': []
+    }
+    
+    # Add reply to discussion
+    db.discussions.update_one(
+        {'_id': ObjectId(discussion_id)},
+        {
+            '$push': {'replies': reply},
+            '$set': {
+                'last_reply_at': now,
+                'updated_at': now
+            }
+        }
+    )
+    
+    return jsonify({'reply': reply}), 201
+
+
+@discussions_bp.route('/<discussion_id>/resolve', methods=['POST'])
+@jwt_required()
+def resolve_discussion(discussion_id):
+    """Mark a discussion as resolved."""
+    db = current_app.db
+    user_id = get_jwt_identity()
+    
+    if not ObjectId.is_valid(discussion_id):
+        return jsonify({'error': 'Invalid discussion ID'}), 400
+    
+    discussion = db.discussions.find_one({'_id': ObjectId(discussion_id)})
+    if not discussion:
+        return jsonify({'error': 'Discussion not found'}), 404
+    
+    # Only author or teacher can resolve
+    user = db.users.find_one({'_id': ObjectId(user_id)})
+    if discussion['author_id'] != user_id and user.get('role') not in ['teacher', 'admin', 'super_admin']:
+        return jsonify({'error': 'Only the author or a teacher can resolve this discussion'}), 403
+    
+    db.discussions.update_one(
+        {'_id': ObjectId(discussion_id)},
+        {'$set': {'is_resolved': True, 'updated_at': datetime.utcnow()}}
+    )
+    
+    return jsonify({'message': 'Discussion marked as resolved'})
+

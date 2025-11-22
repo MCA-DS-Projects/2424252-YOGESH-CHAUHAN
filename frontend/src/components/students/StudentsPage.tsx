@@ -51,10 +51,10 @@ export const StudentsPage: React.FC = () => {
       setStudents(studentsData.map(s => ({
         ...s,
         status: s.is_active ? 'active' : 'inactive',
-        enrolledCourses: 0, // Will be populated from course data
-        completedAssignments: 0,
-        averageGrade: 0,
-        totalPoints: 0
+        enrolledCourses: (s as any).total_assignments || 0,
+        completedAssignments: (s as any).completed_assignments || 0,
+        averageGrade: (s as any).average_grade || 0,
+        totalPoints: (s as any).total_points || 0
       })));
     } catch (err) {
       console.error('Failed to fetch students:', err);

@@ -4,19 +4,45 @@ import { X, AlertCircle, Loader2 } from 'lucide-react';
 interface VideoPlayerProps {
   videoId: string;
   title: string;
+  youtubeUrl?: string; // YouTube URL if available
   onClose: () => void;
   onComplete?: () => void;
   initialWatchTime?: number; // Resume from last position
   onProgressUpdate?: (watchTime: number, duration: number) => void; // Callback for progress updates
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, title, onClose, onComplete, initialWatchTime = 0, onProgressUpdate }) => {
+export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, title, youtubeUrl, onClose, onComplete, initialWatchTime = 0, onProgressUpdate }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [watchTime, setWatchTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isResumed, setIsResumed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isYouTube, setIsYouTube] = useState(false);
+  const [youtubeVideoId, setYoutubeVideoId] = useState<string | null>(null);
+
+  // Extract YouTube video ID from URL
+  const extractYouTubeId = (url: string): string | null => {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return match && match[2].length === 11 ? match[2] : null;
+  };
+
+  // Check if YouTube URL is provided
+  useEffect(() => {
+    if (youtubeUrl) {
+      const ytId = extractYouTubeId(youtubeUrl);
+      if (ytId) {
+        setIsYouTube(true);
+        setYoutubeVideoId(ytId);
+        setIsLoading(false);
+      } else {
+        setError('Invalid YouTube URL');
+        setIsLoading(false);
+      }
+    }
+  }, [youtubeUrl]);
 
   useEffect(() => {
     // Prevent body scroll when modal is open
@@ -37,6 +63,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, title, onClos
 
   // Load video with proper error handling and loading states
   useEffect(() => {
+    // Skip loading for YouTube videos
+    if (isYouTube) return;
+    
     if (!videoRef.current) return;
 
     const loadVideo = async () => {
@@ -93,10 +122,53 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, title, onClos
     };
 
     loadVideo();
-  }, [videoId]);
+  }, [videoId, isYouTube]);
 
-  // Track video progress
+  // Track YouTube video progress
   useEffect(() => {
+    if (!isYouTube) return;
+
+    // For YouTube, we'll track progress using intervals
+    const progressInterval = setInterval(async () => {
+      // Estimate watch time (YouTube doesn't provide exact API without iframe API setup)
+      const estimatedWatchTime = watchTime + 10; // Increment by 10 seconds
+      setWatchTime(estimatedWatchTime);
+
+      // Update progress on backend
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      if (!token) return;
+
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+        await fetch(`${baseUrl}/videos/${videoId}/progress`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            watchTime: estimatedWatchTime,
+            duration: duration || 600 // Default 10 minutes if not known
+          })
+        });
+
+        if (onProgressUpdate) {
+          onProgressUpdate(estimatedWatchTime, duration || 600);
+        }
+      } catch (error) {
+        console.error('Failed to update YouTube video progress:', error);
+      }
+    }, 10000); // Update every 10 seconds
+
+    return () => {
+      clearInterval(progressInterval);
+    };
+  }, [isYouTube, videoId, watchTime, duration, onProgressUpdate]);
+
+  // Track video progress for local videos
+  useEffect(() => {
+    if (isYouTube) return; // Skip for YouTube videos
+    
     const video = videoRef.current;
     if (!video) return;
 
@@ -265,29 +337,46 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, title, onClos
               </div>
             )}
 
-            {/* Video Player - Requirement 3.5: Implement video controls (play, pause, seek, volume) */}
-            <video
-              ref={videoRef}
-              controls
-              autoPlay={!error && !isLoading}
-              className={`w-full ${isLoading || error ? 'invisible' : 'visible'}`}
-              style={{ maxHeight: '70vh' }}
-              onError={(e) => {
-                console.error('Video element error:', e);
-                setError('Video playback error. The video format may not be supported by your browser.');
-                setIsLoading(false);
-              }}
-              onLoadStart={() => {
-                // Video is starting to load
-                setIsLoading(true);
-              }}
-              onCanPlay={() => {
-                // Video can start playing
-                setIsLoading(false);
-              }}
-            >
-              Your browser does not support the video tag.
-            </video>
+            {/* YouTube Player */}
+            {isYouTube && youtubeVideoId && !error && (
+              <div className="relative w-full" style={{ paddingBottom: '56.25%', maxHeight: '70vh' }}>
+                <iframe
+                  ref={iframeRef}
+                  className="absolute top-0 left-0 w-full h-full"
+                  src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&enablejsapi=1&rel=0`}
+                  title={title}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            )}
+
+            {/* Local Video Player - Requirement 3.5: Implement video controls (play, pause, seek, volume) */}
+            {!isYouTube && (
+              <video
+                ref={videoRef}
+                controls
+                autoPlay={!error && !isLoading}
+                className={`w-full ${isLoading || error ? 'invisible' : 'visible'}`}
+                style={{ maxHeight: '70vh' }}
+                onError={(e) => {
+                  console.error('Video element error:', e);
+                  setError('Video playback error. The video format may not be supported by your browser.');
+                  setIsLoading(false);
+                }}
+                onLoadStart={() => {
+                  // Video is starting to load
+                  setIsLoading(true);
+                }}
+                onCanPlay={() => {
+                  // Video can start playing
+                  setIsLoading(false);
+                }}
+              >
+                Your browser does not support the video tag.
+              </video>
+            )}
           </div>
 
           {/* Progress Info */}

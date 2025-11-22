@@ -39,7 +39,6 @@ interface AssignmentManagementState {
 
 export const AssignmentManagement: React.FC = () => {
   const { user } = useAuth();
-  const [shouldThrowError, setShouldThrowError] = useState(false);
   
   const [state, setState] = useState<AssignmentManagementState>({
     assignments: [],
@@ -338,11 +337,6 @@ export const AssignmentManagement: React.FC = () => {
     );
   }
 
-  // Test error boundary (only in development)
-  if (shouldThrowError) {
-    throw new Error('Test error: ErrorBoundary is working correctly!');
-  }
-
   // If assignment is selected, show detail view
   if (state.selectedAssignment) {
     const assignment = state.selectedAssignment;
@@ -533,21 +527,6 @@ export const AssignmentManagement: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Test ErrorBoundary Button (Development Only) */}
-      {import.meta.env.DEV && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <p className="text-sm text-yellow-800 mb-2">
-            <strong>Development Mode:</strong> Test the ErrorBoundary component
-          </p>
-          <button
-            onClick={() => setShouldThrowError(true)}
-            className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm"
-          >
-            Trigger Test Error
-          </button>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

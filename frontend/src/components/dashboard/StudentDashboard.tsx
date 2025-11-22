@@ -367,11 +367,9 @@ export const StudentDashboard: React.FC = () => {
               const buttonText = hasStarted ? 'Continue' : 'Start';
               
               return (
-              <a 
+              <div 
                 key={course.id}
-                href={`/courses/${course.id}`}
-                onClick={(e) => {
-                  e.preventDefault();
+                onClick={() => {
                   window.history.pushState({}, '', `/courses/${course.id}`);
                   window.dispatchEvent(new Event('navigation'));
                 }}
@@ -423,10 +421,8 @@ export const StudentDashboard: React.FC = () => {
                       {course.progress > 80 ? 'Almost done!' : course.progress > 50 ? 'Good progress' : 'Just started'}
                     </span>
                   </div>
-                  <a 
-                    href={`/courses/${course.id}`}
+                  <button 
                     onClick={(e) => {
-                      e.preventDefault();
                       e.stopPropagation();
                       window.history.pushState({}, '', `/courses/${course.id}`);
                       window.dispatchEvent(new Event('navigation'));
@@ -436,9 +432,9 @@ export const StudentDashboard: React.FC = () => {
                     <Play className="h-3 w-3 sm:h-4 sm:w-4" />
                     <span className="hidden sm:inline">{buttonText}</span>
                     <span className="sm:hidden">Go</span>
-                  </a>
+                  </button>
                 </div>
-              </a>
+              </div>
             );
             }).filter(Boolean)}
           </div>

@@ -12,8 +12,7 @@ import { ProfilePage } from '../profile/ProfilePage';
 import { SettingsPage } from '../settings/SettingsPage';
 import { SuperAdminSettings } from '../settings/SuperAdminSettings';
 import { Notifications } from '../../pages/Notifications';
-// Messages feature temporarily disabled - keeping import commented for future use
-// import { MessagesPage } from '../messages/MessagesPage';
+
 import { AchievementsPage } from '../achievements/AchievementsPage';
 import { StudentsPage } from '../students/StudentsPage';
 import { SchedulePage } from '../schedule/SchedulePage';
@@ -127,10 +126,6 @@ export const AppRouter: React.FC = () => {
         return user?.role === 'super_admin' ? <SuperAdminSettings /> : <SettingsPage />;
       case '/notifications':
         return <Notifications />;
-      case '/messages':
-        // Messages feature temporarily disabled - redirect to dashboard
-        window.history.replaceState({}, '', '/dashboard');
-        return <Dashboard />;
       case '/achievements':
         return <AchievementsPage />;
       case '/students':

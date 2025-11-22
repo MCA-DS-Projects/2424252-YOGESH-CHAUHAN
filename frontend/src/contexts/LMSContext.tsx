@@ -18,10 +18,10 @@ interface Course {
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
   rating: number;
   students: number;
-  is_active?: boolean;
+  is_active: boolean;
   // Optional fields for backward compatibility
-  courseId?: string;
-  _id?: string;
+  courseId: string;
+  _id: string;
 }
 
 interface Assignment {
@@ -108,33 +108,38 @@ export const LMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return course.is_enrolled !== false;
         })
         .map((course: any) => {
-          const transformed = {
-            id: course._id || course.course_id,
-            title: course.title,
-            description: course.description,
+          // Ensure we have a valid ID from multiple possible sources
+          const courseId = course._id || course.course_id || course.id;
+          
+          if (!courseId) {
+            console.error('Course missing ID after transformation:', course);
+            return null; // Return null for courses without IDs
+          }
+          
+          const transformed: Course = {
+            id: courseId,
+            title: course.title || 'Untitled Course',
+            description: course.description || '',
             instructor: course.teacher_name || 'Instructor',
             progress: course.progress || course.average_progress || 0,
             totalLessons: course.materials?.length || 0,
             completedLessons: Math.floor(((course.progress || course.average_progress || 0) / 100) * (course.materials?.length || 0)),
             thumbnail: course.thumbnail || 'https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg?auto=compress&cs=tinysrgb&w=400',
-            category: course.category,
-            difficulty: course.difficulty,
+            category: course.category || 'General',
+            difficulty: (course.difficulty as 'Beginner' | 'Intermediate' | 'Advanced') || 'Beginner',
             rating: 4.5, // Default rating - could be enhanced with real rating data
-            students: course.enrolled_students,
-            createdAt: new Date(course.created_at).getTime(),
-            duration: course.duration,
+            students: course.enrolled_students || 0,
+            createdAt: course.created_at ? new Date(course.created_at).getTime() : Date.now(),
+            duration: course.duration || 'N/A',
             is_active: course.is_active !== false,
             // Keep original IDs for backward compatibility
-            courseId: course.course_id,
-            _id: course._id
+            courseId: courseId,
+            _id: courseId
           };
           
-          if (!transformed.id) {
-            console.error('Course missing ID after transformation:', course);
-          }
-          
           return transformed;
-        });
+        })
+        .filter((course): course is Course => course !== null); // Remove any null entries
       
       console.log('Transformed courses:', transformedCourses);
       

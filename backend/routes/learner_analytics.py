@@ -13,9 +13,12 @@ def calculate_student_performance_score(student_data, course_id=None):
     """
     score_components = []
     
+    # Get student_id as string
+    student_id = str(student_data['_id'])
+    
     # Assignment performance (60% weight)
     assignment_scores = []
-    assignment_filter = {'student_id': student_data['_id']}
+    assignment_filter = {'student_id': student_id}
     if course_id:
         assignment_filter['course_id'] = course_id
     
@@ -28,7 +31,7 @@ def calculate_student_performance_score(student_data, course_id=None):
             score_components.append(('assignment', avg_assignment_score, 0.6))
     
     # Course progress (40% weight)
-    enrollment_filter = {'student_id': student_data['_id']}
+    enrollment_filter = {'student_id': student_id}
     if course_id:
         enrollment_filter['course_id'] = course_id
     
@@ -54,8 +57,11 @@ def get_learning_pace(student_data, course_id=None):
     """
     db = current_app.db
     
+    # Get student_id as string
+    student_id = str(student_data['_id'])
+    
     # Get enrollment date and progress
-    enrollment_filter = {'student_id': student_data['_id']}
+    enrollment_filter = {'student_id': student_id}
     if course_id:
         enrollment_filter['course_id'] = course_id
     
@@ -79,7 +85,7 @@ def get_learning_pace(student_data, course_id=None):
     
     # Get submission frequency
     recent_submissions = list(db.submissions.find({
-        'student_id': student_data['_id'],
+        'student_id': student_id,
         'submitted_at': {'$gte': datetime.utcnow() - timedelta(days=30)}
     }))
     
@@ -100,14 +106,15 @@ def get_areas_of_difficulty(student_data, course_id=None):
     db = current_app.db
     difficulties = []
     
-
+    # Get student_id as string
+    student_id = str(student_data['_id'])
     
     # Overdue assignments
     overdue_assignments = list(db.assignments.find({
         'due_date': {'$lt': datetime.utcnow()},
         '_id': {'$nin': [
             ObjectId(sub['assignment_id']) for sub in 
-            db.submissions.find({'student_id': student_data['_id']})
+            db.submissions.find({'student_id': student_id})
         ]}
     }))
     
@@ -119,7 +126,7 @@ def get_areas_of_difficulty(student_data, course_id=None):
     
     # Low course progress
     low_progress_courses = []
-    enrollments = list(db.enrollments.find({'student_id': student_data['_id']}))
+    enrollments = list(db.enrollments.find({'student_id': student_id}))
     
     for enrollment in enrollments:
         if enrollment.get('progress', 0) < 30:  # Less than 30% progress
@@ -150,7 +157,7 @@ def get_performance_analysis():
         
         # Check user permissions
         user = db.users.find_one({'_id': ObjectId(user_id)})
-        if not user or user['role'] not in ['teacher', 'super_admin']:
+        if not user or user['role'] not in ['teacher', 'admin']:
             return jsonify({'error': 'Access denied. Teachers and admins only.'}), 403
         
         # Get query parameters
@@ -288,7 +295,7 @@ def get_student_recommendations():
         
         # Check user permissions
         user = db.users.find_one({'_id': ObjectId(user_id)})
-        if not user or user['role'] not in ['teacher', 'super_admin']:
+        if not user or user['role'] not in ['teacher', 'admin']:
             return jsonify({'error': 'Access denied. Teachers and admins only.'}), 403
         
         student_id = request.args.get('student_id')
@@ -437,7 +444,7 @@ def get_performance_alerts():
         
         # Check user permissions
         user = db.users.find_one({'_id': ObjectId(user_id)})
-        if not user or user['role'] not in ['teacher', 'super_admin']:
+        if not user or user['role'] not in ['teacher', 'admin']:
             return jsonify({'error': 'Access denied. Teachers and admins only.'}), 403
         
         alerts = []
@@ -477,7 +484,7 @@ def get_performance_alerts():
                 'submitted_at': {'$gte': datetime.utcnow() - timedelta(days=7)}
             }))
             
-            failed_assignments = [sub for sub in recent_submissions if sub.get('grade', 0) < 50]
+            failed_assignments = [sub for sub in recent_submissions if sub.get('grade') is not None and sub.get('grade') < 50]
             if len(failed_assignments) >= 2:
                 alerts.append({
                     'type': 'academic',

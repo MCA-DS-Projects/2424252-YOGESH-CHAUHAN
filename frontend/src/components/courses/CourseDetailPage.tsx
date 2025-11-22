@@ -39,8 +39,11 @@ interface CourseModule {
   materials: {
     id: string;
     title: string;
-    type: 'pdf' | 'video' | 'link';
+    type: 'pdf' | 'video' | 'link' | 'document';
     url: string;
+    youtubeUrl?: string;
+    contentId?: string;
+    videoId?: string;
     size?: string;
   }[];
 }
@@ -391,10 +394,13 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId }) 
               completed: completedMaterials.includes(module._id),
               type: 'video', // Default type
               materials: module.materials?.map((material: any) => ({
-                id: material.content || material._id,
+                id: material._id,
                 title: material.title,
                 type: material.type,
                 url: material.content || material.file_path || material.url,
+                youtubeUrl: material.youtube_url || '',
+                contentId: material.content || material._id,
+                videoId: material.content || material._id,
                 size: material.file_size
               })) || []
             }));
@@ -408,10 +414,13 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId }) 
               completed: completedMaterials.includes(material._id),
               type: material.type === 'video' ? 'video' : 'reading',
               materials: [{
-                id: material.content || material._id,
+                id: material._id,
                 title: material.title,
                 type: material.type,
                 url: material.content || material.file_path || material.url,
+                youtubeUrl: material.youtube_url || '',
+                contentId: material.content || material._id,
+                videoId: material.content || material._id,
                 size: material.file_size
               }]
             }));
@@ -928,7 +937,11 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId }) 
                         <div className="flex items-center gap-2">
                           {material.type === 'video' && (
                             <button
-                              onClick={() => setSelectedVideo({ id: material.id, title: material.title })}
+                              onClick={() => setSelectedVideo({ 
+                                id: material.videoId || material.contentId || material.id, 
+                                title: material.title,
+                                youtubeUrl: material.youtubeUrl 
+                              })}
                               className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
                             >
                               <Play className="h-3 w-3" />

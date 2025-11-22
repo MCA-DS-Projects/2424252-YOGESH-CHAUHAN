@@ -118,6 +118,15 @@ export const API_ENDPOINTS = {
     BASE: `${API_BASE_URL}/achievements`,
   },
 
+  // Messages
+  MESSAGES: {
+    CONVERSATIONS: `${API_BASE_URL}/messages/conversations`,
+    CONVERSATION: (partnerId: number) => `${API_BASE_URL}/messages/conversation/${partnerId}`,
+    SEND: `${API_BASE_URL}/messages/send`,
+    UNREAD_COUNT: `${API_BASE_URL}/messages/unread-count`,
+    USERS: `${API_BASE_URL}/messages/users`,
+  },
+
   // Health check
   HEALTH: `${API_BASE_URL}/health`,
 };
@@ -499,6 +508,23 @@ export const notificationsAPI = {
 
   delete: (id: string) =>
     apiClient.delete(API_ENDPOINTS.NOTIFICATIONS.BY_ID(id)),
+};
+
+export const messagesAPI = {
+  getConversations: () =>
+    apiClient.get(API_ENDPOINTS.MESSAGES.CONVERSATIONS),
+
+  getConversationMessages: (partnerId: number) =>
+    apiClient.get(API_ENDPOINTS.MESSAGES.CONVERSATION(partnerId)),
+
+  sendMessage: (receiverId: number, content: string) =>
+    apiClient.post(API_ENDPOINTS.MESSAGES.SEND, { receiver_id: receiverId, content }),
+
+  getUnreadCount: () =>
+    apiClient.get(API_ENDPOINTS.MESSAGES.UNREAD_COUNT),
+
+  getAvailableUsers: () =>
+    apiClient.get(API_ENDPOINTS.MESSAGES.USERS),
 };
 
 export default apiClient;

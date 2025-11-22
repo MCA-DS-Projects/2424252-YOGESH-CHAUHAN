@@ -22,6 +22,7 @@ export const Dashboard: React.FC = () => {
           <TeacherDashboard />
         </ErrorBoundary>
       );
+    case 'admin':
     case 'super_admin':
       return (
         <ErrorBoundary>

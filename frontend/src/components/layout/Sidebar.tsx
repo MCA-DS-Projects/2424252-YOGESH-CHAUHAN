@@ -18,7 +18,6 @@ export const Sidebar: React.FC = () => {
     { icon: Home, label: 'Dashboard', href: '/dashboard' },
     { icon: BookOpen, label: 'My Courses', href: '/courses' },
     { icon: Assignment, label: 'Assignments', href: '/assignments', badge: 3 },
-    { icon: MessageSquare, label: 'Discussions', href: '/discussions', badge: 2 },
     { icon: BarChart3, label: 'Analytics', href: '/analytics' },
     { icon: Brain, label: 'AI Assistant', href: '/ai-assistant' },
     ...(user?.role === 'instructor' ? [

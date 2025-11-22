@@ -228,8 +228,8 @@ The backend will start on `http://localhost:5000`
 - **Email**: teacher02@datams.edu, **Password**: Teach@2025
 
 ### Admins
-- **Email**: admin@datams.edu, **Password**: Admin@2025
-- **Email**: superadmin@datams.edu, **Password**: Admin@123456
+- **Email**: admin@datams.edu, **Password**: Yogi@#2025
+- **Email**: superadmin@datams.edu, **Password**: Admin@123456 (deprecated - use admin@datams.edu)
 
 ## Development
 

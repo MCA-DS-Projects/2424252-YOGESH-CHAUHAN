@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, ArrowLeft, Send, CheckCircle, AlertCircle } from 'lucide-react';
+import { authAPI } from '../../config/api';
 
 interface ForgotPasswordFormProps {
   onBackToLogin: () => void;
@@ -17,13 +18,14 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({ onBackTo
     setIsLoading(true);
 
     try {
-      // Simulate API call - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Call backend API using authAPI
+      await authAPI.forgotPassword(email);
       
-      // For demo purposes, always show success
+      // Show success message
       setIsSuccess(true);
     } catch (error) {
-      setError('Failed to send reset email. Please try again.');
+      console.error('Forgot password error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to send reset email. Please try again.');
     } finally {
       setIsLoading(false);
     }

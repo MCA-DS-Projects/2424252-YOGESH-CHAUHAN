@@ -50,7 +50,7 @@ def register():
         if not validate_password(data['password']):
             return jsonify({'error': 'Password must be at least 8 characters with uppercase, lowercase, digit, and special character'}), 400
         
-        # Validate role - super_admin cannot be registered, only login
+        # Validate role - admin cannot be registered, only login
         valid_roles = ['student', 'teacher']
         if data['role'] not in valid_roles:
             return jsonify({'error': 'Invalid role. Only student and teacher roles are allowed for registration'}), 400
@@ -368,11 +368,78 @@ def forgot_password():
             'used': False
         })
         
-        # In a real application, you would send an email here
-        # For demo purposes, we'll return the token (remove this in production)
+        # Send password reset email
+        try:
+            from services.notification_service import send_email
+            
+            reset_link = f"http://localhost:3000/reset-password?token={reset_token}"
+            
+            email_subject = "Password Reset Request - EduNexa LMS"
+            email_body = f"""
+Hello {user.get('name', 'User')},
+
+You have requested to reset your password for your EduNexa LMS account.
+
+Click the link below to reset your password:
+{reset_link}
+
+This link will expire in 1 hour.
+
+If you did not request this password reset, please ignore this email.
+
+Best regards,
+EduNexa LMS Team
+"""
+            
+            email_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }}
+        .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }}
+        .button {{ display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+        .footer {{ text-align: center; margin-top: 20px; color: #666; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Password Reset Request</h1>
+        </div>
+        <div class="content">
+            <p>Hello {user.get('name', 'User')},</p>
+            <p>You have requested to reset your password for your EduNexa LMS account.</p>
+            <p>Click the button below to reset your password:</p>
+            <a href="{reset_link}" class="button">Reset Password</a>
+            <p>Or copy and paste this link in your browser:</p>
+            <p style="word-break: break-all; color: #667eea;">{reset_link}</p>
+            <p><strong>This link will expire in 1 hour.</strong></p>
+            <p>If you did not request this password reset, please ignore this email.</p>
+            <div class="footer">
+                <p>Best regards,<br>EduNexa LMS Team</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+            
+            email_sent = send_email(user['email'], email_subject, email_body, email_html)
+            
+            if email_sent:
+                print(f"Password reset email sent to {user['email']}")
+            else:
+                print(f"Failed to send password reset email to {user['email']}")
+        
+        except Exception as email_error:
+            print(f"Error sending password reset email: {email_error}")
+            # Don't fail the request if email fails
+        
         return jsonify({
-            'message': 'If an account with that email exists, a password reset link has been sent',
-            'reset_token': reset_token  # Remove this in production
+            'message': 'If an account with that email exists, a password reset link has been sent'
         }), 200
         
     except Exception as e:
@@ -621,7 +688,7 @@ def cleanup_tokens():
         
         # Check if user is admin
         user = db.users.find_one({'_id': ObjectId(user_id)})
-        if not user or user['role'] != 'super_admin':
+        if not user or user['role'] != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
         
         # Run token cleanup
@@ -648,7 +715,7 @@ def get_token_stats():
         
         # Check if user is admin
         user = db.users.find_one({'_id': ObjectId(user_id)})
-        if not user or user['role'] != 'super_admin':
+        if not user or user['role'] != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
         
         # Get token statistics

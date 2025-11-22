@@ -322,13 +322,13 @@ def create_course():
             
             # Create materials for this module
             for lesson in module.get('lessons', []):
-                if lesson.get('content') and lesson.get('title'):
+                if (lesson.get('content') or lesson.get('youtube_url')) and lesson.get('title'):
                     # Determine material type based on content or explicit type
                     material_type = lesson.get('type', 'video')
                     
                     # Ensure type is set to 'video' for video materials
-                    # Video content will be a video_id (ObjectId string)
-                    if material_type == 'video' or (not lesson.get('type') and lesson.get('content')):
+                    # Video content will be a video_id (ObjectId string) or YouTube URL
+                    if material_type == 'video' or (not lesson.get('type') and (lesson.get('content') or lesson.get('youtube_url'))):
                         material_type = 'video'
                     
                     material_data = {
@@ -337,7 +337,8 @@ def create_course():
                         'title': lesson['title'],
                         'description': lesson.get('description', ''),
                         'type': material_type,  # Ensure type is 'video' for video materials
-                        'content': lesson['content'],  # Store video_id in content field
+                        'content': lesson.get('content', ''),  # Store video_id in content field (for local videos)
+                        'youtube_url': lesson.get('youtube_url', ''),  # Store YouTube URL
                         'order': lesson.get('order', 0),
                         'is_required': lesson.get('is_required', False),
                         'uploaded_by': user_id,
@@ -566,6 +567,7 @@ def upload_video(course_id):
             'filename': unique_filename,
             'file_path': video_path,
             'url': f'/api/courses/videos/{unique_filename}',
+            'youtube_url': '',  # Empty for local videos
             'duration': duration,
             'order': int(order),
             'is_required': True,
@@ -1024,19 +1026,127 @@ def get_course_students(course_id):
         for enrollment in enrollments:
             student = db.users.find_one({'_id': ObjectId(enrollment['student_id'])})
             if student:
+                student_id = str(student['_id'])
+                
+                # Get student's submissions for this course
+                assignments = list(db.assignments.find({'course_id': course_id}))
+                assignment_ids = [str(a['_id']) for a in assignments]
+                
+                submissions = list(db.submissions.find({
+                    'student_id': student_id,
+                    'assignment_id': {'$in': assignment_ids}
+                }))
+                
+                # Calculate average grade
+                graded_submissions = [s for s in submissions if s.get('grade') is not None]
+                average_grade = 0
+                if graded_submissions:
+                    total_grade = sum(s['grade'] for s in graded_submissions)
+                    total_max = sum(a['max_points'] for a in assignments if str(a['_id']) in [s['assignment_id'] for s in graded_submissions])
+                    if total_max > 0:
+                        average_grade = round((total_grade / total_max) * 100, 1)
+                
                 student_data = {
-                    'id': str(student['_id']),
+                    'id': student_id,
                     'name': student['name'],
                     'email': student['email'],
                     'roll_no': student.get('roll_no', ''),
                     'department': student.get('department', ''),
                     'enrolled_at': enrollment['enrolled_at'],
                     'progress': enrollment.get('progress', 0),
-                    'is_active': enrollment.get('is_active', True)
+                    'is_active': enrollment.get('is_active', True),
+                    'average_grade': average_grade,
+                    'total_points': student.get('total_points', 0),
+                    'completed_assignments': len([s for s in submissions if s.get('status') in ['submitted', 'graded']]),
+                    'total_assignments': len(assignments)
                 }
                 students.append(student_data)
         
         return jsonify({'students': students}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@courses_bp.route('/<course_id>/add-youtube-video', methods=['POST'])
+@jwt_required()
+def add_youtube_video(course_id):
+    """Add a YouTube video to course materials"""
+    try:
+        user_id = get_jwt_identity()
+        db = current_app.db
+        
+        # Check permissions
+        course = db.courses.find_one({'_id': ObjectId(course_id)})
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        user = db.users.find_one({'_id': ObjectId(user_id)})
+        if user['role'] != 'admin' and course['teacher_id'] != user_id:
+            return jsonify({'error': 'Access denied'}), 403
+        
+        data = request.get_json()
+        
+        # Get form data
+        title = data.get('title')
+        description = data.get('description', '')
+        youtube_url = data.get('youtube_url', '')
+        module_id = data.get('module_id', '')
+        order = data.get('order', 0)
+        duration = data.get('duration', '')
+        
+        if not title:
+            return jsonify({'error': 'Video title is required'}), 400
+        
+        if not youtube_url:
+            return jsonify({'error': 'YouTube URL is required'}), 400
+        
+        # Validate YouTube URL format
+        import re
+        youtube_regex = r'(https?://)?(www\.)?(youtube\.com|youtu\.be)/.+'
+        if not re.match(youtube_regex, youtube_url):
+            return jsonify({'error': 'Invalid YouTube URL'}), 400
+        
+        # Create video material record
+        video_data = {
+            'course_id': course_id,
+            'module_id': module_id if module_id else None,
+            'title': title,
+            'description': description,
+            'type': 'video',
+            'content': '',  # Empty for YouTube videos
+            'youtube_url': youtube_url,
+            'duration': duration,
+            'order': int(order),
+            'is_required': True,
+            'uploaded_by': user_id,
+            'created_at': datetime.utcnow(),
+            'views': 0,
+            'completed_by': []
+        }
+        
+        result = db.materials.insert_one(video_data)
+        video_data['_id'] = str(result.inserted_id)
+        video_data['material_id'] = str(result.inserted_id)
+        
+        # Notify enrolled students
+        enrollments = db.enrollments.find({'course_id': course_id})
+        for enrollment in enrollments:
+            try:
+                create_notification(
+                    db=db,
+                    user_id=enrollment['student_id'],
+                    title='New Video Added',
+                    message=f'A new video "{title}" has been added to {course["title"]}',
+                    notification_type='info',
+                    link=f'/courses/detail?id={course_id}'
+                )
+            except:
+                pass
+        
+        return jsonify({
+            'message': 'YouTube video added successfully',
+            'video': video_data
+        }), 201
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

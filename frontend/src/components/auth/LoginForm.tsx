@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Mail, Lock, Eye, EyeOff, LogIn, AlertCircle, CheckCircle } from 'lucide-react';
-import { GoogleLoginButton } from './GoogleLoginButton';
+
 
 interface LoginFormProps {
   onToggleForm: () => void;
@@ -22,7 +22,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm, onForgotPass
     setError('');
 
     try {
-      await login(email, password, selectedRole);
+      await login(email, password);
     } catch (error) {
       setError('Invalid email or password');
     }
@@ -37,8 +37,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm, onForgotPass
       setSelectedRole('student');
     } else if (demoEmail.includes('teacher')) {
       setSelectedRole('teacher');
-    } else if (demoEmail.includes('superadmin')) {
-      setSelectedRole('super_admin');
+    } else if (demoEmail.includes('admin')) {
+      setSelectedRole('admin');
     }
   };
 
@@ -88,7 +88,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm, onForgotPass
           >
             <option value="student">Student</option>
             <option value="teacher">Teacher</option>
-            <option value="super_admin">Super Administrator</option>
+            <option value="admin">Super Administrator</option>
           </select>
         </div>
 
@@ -158,43 +158,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm, onForgotPass
       </form>
 
       {/* Divider */}
-      <div className="relative my-4 sm:my-6">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-300"></div>
-        </div>
-        <div className="relative flex justify-center text-xs sm:text-sm">
-          <span className="px-2 bg-white text-gray-500">Or continue with</span>
-        </div>
-      </div>
 
-      {/* Social Login - Only for Students */}
-      {selectedRole === 'student' && (
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
-          <GoogleLoginButton role={selectedRole} />
-          <button 
-            type="button"
-            disabled
-            className="flex items-center justify-center px-3 sm:px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed opacity-60"
-          >
-            <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24">
-              <path
-                fill="#1877F2"
-                d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.407c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385c5.737-.9 10.125-5.864 10.125-11.854z"
-              />
-            </svg>
-            <span className="ml-1 sm:ml-2 text-xs sm:text-sm font-medium text-gray-700">Facebook</span>
-          </button>
-        </div>
-      )}
-      
-      {/* Message for non-student roles */}
-      {selectedRole !== 'student' && (
-        <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-center">
-          <p className="text-sm text-gray-600">
-            Social login is only available for students. Teachers and administrators must use email/password login.
-          </p>
-        </div>
-      )}
 
       {/* Demo Accounts */}
       <div className="mt-6 sm:mt-8 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -221,17 +185,18 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm, onForgotPass
           </button>
           <button
             type="button"
-            className="text-left p-2 bg-white border border-gray-300 rounded-lg hover:bg-blue-50 transition-colors"
-            onClick={() => handleDemoLogin('superadmin@datams.edu', 'Admin@123456')}
+            className="text-left p-2 bg-white border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors"
+            onClick={() => handleDemoLogin('admin@datams.edu', 'Yogi@#2025')}
           >
-            <p className="text-xs font-medium text-blue-900">Super Administrator</p>
-            <div className="text-xs text-blue-700 truncate">superadmin@datams.edu</div>
+            <p className="text-xs font-medium text-purple-900">Super Administrator</p>
+            <div className="text-xs text-purple-700 truncate">admin@datams.edu</div>
+            <div className="text-[10px] text-purple-600 mt-0.5">Full System Access</div>
           </button>
         </div>
       </div>
 
       {/* Only show signup option for non-admin roles */}
-      {selectedRole !== 'super_admin' && (
+      {selectedRole !== 'admin' && (
         <p className="text-center text-sm text-gray-600 mt-6">
           Don't have an account?{' '}
           <button
@@ -243,9 +208,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm, onForgotPass
         </p>
       )}
       
-      {selectedRole === 'super_admin' && (
+      {selectedRole === 'admin' && (
         <p className="text-center text-sm text-gray-500 mt-6 italic">
-          Super Administrator accounts are predefined by the system.
+          Super Administrator account is predefined by the system. Only one admin exists with full access.
         </p>
       )}
     </div>

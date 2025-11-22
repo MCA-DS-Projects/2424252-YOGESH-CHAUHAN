@@ -442,7 +442,7 @@ def delete_assignment(assignment_id):
             return jsonify({'error': 'Assignment not found'}), 404
         
         # Check permissions
-        is_admin = user['role'] in ['admin', 'super_admin']
+        is_admin = user['role'] == 'admin'
         is_teacher = user['role'] == 'teacher'
         
         # Get course to check ownership
@@ -482,7 +482,7 @@ def delete_assignment(assignment_id):
             
             thread2 = threading.Thread(
                 target=notify_users_by_role,
-                args=(db, ['admin', 'super_admin'], admin_subject, admin_body)
+                args=(db, ['admin'], admin_subject, admin_body)
             )
             thread2.daemon = True
             thread2.start()

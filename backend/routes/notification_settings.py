@@ -255,7 +255,7 @@ def admin_send_notification():
         
         # Check if user is admin
         user = db.users.find_one({'_id': ObjectId(user_id)})
-        if not user or user['role'] not in ['admin', 'super_admin']:
+        if not user or user['role'] != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
         
         data = request.get_json()
@@ -297,7 +297,7 @@ def get_notification_stats():
         
         # Check if user is admin
         user = db.users.find_one({'_id': ObjectId(user_id)})
-        if not user or user['role'] not in ['admin', 'super_admin']:
+        if not user or user['role'] != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
         
         # Get statistics

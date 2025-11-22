@@ -36,10 +36,22 @@ export const CourseVideosView: React.FC<CourseVideosViewProps> = ({ courseId, co
   const [enrolledStudents, setEnrolledStudents] = useState(0);
 
   useEffect(() => {
-    fetchVideos();
+    if (courseId) {
+      fetchVideos();
+    } else {
+      console.warn('CourseVideosView: courseId is undefined');
+      setError('Course ID is missing');
+      setLoading(false);
+    }
   }, [courseId]);
 
   const fetchVideos = async () => {
+    if (!courseId) {
+      setError('Course ID is required');
+      setLoading(false);
+      return;
+    }
+
     try {
       const token = getAuthToken();
       if (!token) {

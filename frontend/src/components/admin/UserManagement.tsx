@@ -108,6 +108,15 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  // Read URL parameters on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roleParam = urlParams.get('role');
+    if (roleParam) {
+      setRoleFilter(roleParam);
+    }
+  }, []);
+
   useEffect(() => {
     if (currentUser && ['admin', 'super_admin'].includes(currentUser.role)) {
       fetchUsers();
@@ -525,20 +534,7 @@ const UserManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Debug Info Panel - Only show in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm">
-          <h3 className="font-medium text-yellow-800 mb-2">Debug Information:</h3>
-          <div className="grid grid-cols-2 gap-4 text-yellow-700">
-            <div>Current User: {currentUser?.name || 'Not loaded'}</div>
-            <div>User Role: {currentUser?.role || 'Unknown'}</div>
-            <div>Token Exists: {localStorage.getItem('access_token') ? 'Yes' : 'No'}</div>
-            <div>Backend URL: http://localhost:5000</div>
-            <div>Users Loaded: {users.length}</div>
-            <div>Environment: {process.env.NODE_ENV || 'development'}</div>
-          </div>
-        </div>
-      )}
+
 
       {/* User Statistics */}
       {!loading && !error && users.length > 0 && (

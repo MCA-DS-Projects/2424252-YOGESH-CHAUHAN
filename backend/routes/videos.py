@@ -230,8 +230,11 @@ def stream_video(video_id):
                 if not enrollment:
                     return error_response('You must be enrolled in this course to access this video', 403)
             # Admins have access
-            elif user.get('role') not in ['admin', 'super_admin']:
+            elif user.get('role') != 'admin':
                 return error_response('Unauthorized access', 403)
+        
+        # Get the file path first
+        file_path = video.get('file_path')
         
         # Track view count on video access
         db.videos.update_one(
@@ -242,13 +245,10 @@ def stream_video(video_id):
         # Requirement 6.8: Log file access operation with user ID, file path, and timestamp
         log_file_access(
             user_id=user_id,
-            file_path=file_path,
+            file_path=file_path if file_path else video_id,
             file_type='video',
             operation_type='stream'
         )
-        
-        # Get the file path
-        file_path = video.get('file_path')
         
         # Requirement 6.4: Return 404 for non-existent files
         if not file_path:
@@ -341,6 +341,70 @@ def stream_video(video_id):
             operation_type='stream'
         )
         current_app.logger.error(f"Error streaming video {video_id}: {str(e)}")
+        return error_response(str(e), 500)
+
+@videos_bp.route('/', methods=['GET'])
+@jwt_required()
+def get_all_videos():
+    """Get all videos or video count (for admin dashboard)"""
+    try:
+        db = current_app.db
+        user_id = get_jwt_identity()
+        
+        # Get user to check role
+        user = db.users.find_one({'_id': ObjectId(user_id)})
+        
+        # If requesting just count (for dashboard stats)
+        if request.args.get('count_only') == 'true':
+            total = db.videos.count_documents({})
+            return jsonify({'count': total}), 200
+        
+        # Otherwise return list (same as /list endpoint)
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 10))
+        
+        query = {}
+        
+        # If student, only show videos uploaded by their teachers
+        if user.get('role') == 'student':
+            enrollments = list(db.enrollments.find({'student_id': user_id}))
+            enrolled_course_ids = [e['course_id'] for e in enrollments]
+            courses = list(db.courses.find({'_id': {'$in': [ObjectId(cid) for cid in enrolled_course_ids]}}))
+            teacher_ids = [c['teacher_id'] for c in courses]
+            query['uploaded_by'] = {'$in': teacher_ids}
+        
+        total = db.videos.count_documents(query)
+        videos = list(db.videos.find(query)
+                     .sort('created_at', -1)
+                     .skip((page - 1) * limit)
+                     .limit(limit))
+        
+        video_list = []
+        for video in videos:
+            uploader = db.users.find_one({'_id': ObjectId(video['uploaded_by'])}) if 'uploaded_by' in video else None
+            video_list.append({
+                '_id': str(video['_id']),
+                'filename': video['filename'],
+                'original_filename': video.get('original_filename', ''),
+                'file_size': video.get('file_size', 0),
+                'mime_type': video.get('mime_type', ''),
+                'uploaded_by': video.get('uploaded_by', ''),
+                'uploader_name': uploader.get('name', 'Unknown') if uploader else 'Unknown',
+                'created_at': video['created_at'].isoformat() if 'created_at' in video else None,
+                'video_url': f'/api/videos/{str(video["_id"])}/stream'
+            })
+        
+        response_data = {
+            'videos': video_list,
+            'total': total,
+            'page': page,
+            'limit': limit,
+            'total_pages': (total + limit - 1) // limit
+        }
+        response_camel = convert_dict_keys_to_camel(response_data)
+        return jsonify(response_camel), 200
+        
+    except Exception as e:
         return error_response(str(e), 500)
 
 @videos_bp.route('/list', methods=['GET'])
@@ -549,7 +613,15 @@ def update_video_progress(video_id):
             return error_response('Video not found', 404)
         
         # Find which course this video belongs to
+        # Support both local videos (content field) and YouTube videos (material_id directly)
         material = db.materials.find_one({'content': video_id, 'type': 'video'})
+        if not material:
+            # Try finding by material_id for YouTube videos
+            try:
+                material = db.materials.find_one({'_id': ObjectId(video_id), 'type': 'video'})
+            except:
+                pass
+        
         if not material:
             return error_response('Video not linked to any course material', 404)
         

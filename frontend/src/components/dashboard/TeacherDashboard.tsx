@@ -8,6 +8,7 @@ import { AssignmentAPI } from '../../services/assignmentAPI';
 import { TeacherStats, TeacherCourse } from '../../types/teacher';
 import { Toast } from '../common/Toast';
 import { apiCache, CACHE_KEYS } from '../../utils/cache';
+import { normalizeCourse, getCourseId } from '../../utils/courseUtils';
 import {
   StatsCardSkeleton,
   CourseCardSkeleton,
@@ -443,40 +444,48 @@ export const TeacherDashboard: React.FC = () => {
             </div>
             {recentCourses.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {recentCourses.map((course) => (
-                  <div key={course._id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 mb-2">{course.title}</h3>
-                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{course.description}</p>
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <span className="flex items-center">
-                            <Users className="h-4 w-4 mr-1" />
-                            {course.enrolled_students} students
-                          </span>
-                          <span className="flex items-center">
-                            <FileText className="h-4 w-4 mr-1" />
-                            {course.total_assignments} assignments
-                          </span>
+                {recentCourses.map((course) => {
+                  const courseId = getCourseId(course);
+                  if (!courseId) {
+                    console.warn('Course missing ID, skipping:', course);
+                    return null;
+                  }
+                  
+                  return (
+                    <div key={courseId} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900 mb-2">{course.title}</h3>
+                          <p className="text-sm text-gray-600 mb-3 line-clamp-2">{course.description}</p>
+                          <div className="flex items-center gap-4 text-sm text-gray-500">
+                            <span className="flex items-center">
+                              <Users className="h-4 w-4 mr-1" />
+                              {course.enrolled_students || 0} students
+                            </span>
+                            <span className="flex items-center">
+                              <FileText className="h-4 w-4 mr-1" />
+                              {course.total_assignments || 0} assignments
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${course.is_active ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                        <span className={`text-sm font-medium ${course.is_active ? 'text-green-600' : 'text-gray-600'}`}>
-                          {course.is_active ? 'Active' : 'Inactive'}
-                        </span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${course.is_active ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                          <span className={`text-sm font-medium ${course.is_active ? 'text-green-600' : 'text-gray-600'}`}>
+                            {course.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                        <a 
+                          href={`/courses/${courseId}`}
+                          className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                        >
+                          Manage →
+                        </a>
                       </div>
-                      <a 
-                        href={`/courses/${course._id}`}
-                        className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                      >
-                        Manage →
-                      </a>
                     </div>
-                  </div>
-                ))}
+                  );
+                }).filter(Boolean)}
               </div>
             ) : (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">

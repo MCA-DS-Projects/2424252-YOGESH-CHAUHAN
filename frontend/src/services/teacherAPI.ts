@@ -216,7 +216,14 @@ export class TeacherAPI {
       // Get students from all courses and deduplicate
       for (const course of courses) {
         try {
-          const courseStudents = await this.getCourseStudents(course._id);
+          // Use _id or id, whichever is available
+          const courseId = course._id || (course as any).id;
+          if (!courseId) {
+            console.warn('Course missing ID:', course);
+            continue;
+          }
+          
+          const courseStudents = await this.getCourseStudents(courseId);
           courseStudents.forEach(student => {
             if (!studentIds.has(student.id)) {
               studentIds.add(student.id);
