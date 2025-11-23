@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Brain, User, Bot, Lightbulb, FileText, HelpCircle, MessageCircle, BookOpen, GraduationCap } from 'lucide-react';
+import { Send, Brain, User, Bot, Lightbulb, FileText, MessageCircle, BookOpen, GraduationCap, TrendingUp } from 'lucide-react';
 import { aiAPI } from '../../config/api';
 import { MarkdownRenderer } from '../common/MarkdownRenderer';
 
@@ -21,7 +21,6 @@ export const AIAssistant: React.FC = () => {
   const quickActions = [
     { icon: Lightbulb, text: "Explain a topic", action: "Explain the concept of ", mode: 'explain' as const },
     { icon: FileText, text: "Summarize notes", action: "Summarize this: ", mode: 'summarize' as const },
-
     { icon: MessageCircle, text: "Ask a question", action: "I have a question about ", mode: 'qa' as const },
     { icon: BookOpen, text: "Study tips", action: "Give me study tips for ", mode: 'general' as const },
     { icon: GraduationCap, text: "Course help", action: "Help me with my course on ", mode: 'general' as const }
@@ -244,6 +243,20 @@ I'll be back soon! 😊`,
           {messages.length <= 1 && (
             <div className="px-4 pb-4 border-t border-gray-200 pt-4">
               <p className="text-sm font-medium text-gray-700 mb-3">✨ Quick Actions:</p>
+              
+              {/* Performance Button - Highlighted */}
+              <button
+                onClick={() => {
+                  setInputValue("Show me my complete performance report");
+                  setChatMode('general');
+                  setTimeout(() => handleSendMessage(), 100);
+                }}
+                className="w-full mb-3 flex items-center justify-center gap-3 p-4 text-left bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg"
+              >
+                <TrendingUp className="h-5 w-5 text-white" />
+                <span className="text-base text-white font-semibold">📊 Show My Performance</span>
+              </button>
+
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {quickActions.map((action, index) => (
                   <button

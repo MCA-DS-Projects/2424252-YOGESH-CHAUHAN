@@ -75,6 +75,11 @@ I'm your personal AI tutor, ready to assist you with **{courses_text}** and much
 
 ### 🚀 Here's How I Can Help You:
 
+#### 📊 **Performance Tracking**
+- **Show your complete performance report** with grades, progress, and achievements
+- Track your learning pace and identify areas for improvement
+- Get personalized recommendations based on your performance
+
 #### 📚 **Course Support**
 - Explain difficult concepts and topics
 - Provide study strategies for each subject
@@ -88,7 +93,7 @@ I'm your personal AI tutor, ready to assist you with **{courses_text}** and much
 #### 🎯 **Personalized Learning**
 - Create custom study schedules
 - Recommend learning resources
-- Track your progress and suggest improvements
+- Suggest improvements based on your progress
 
 #### 💡 **Study Tips & Motivation**
 - Share proven study techniques
@@ -96,6 +101,8 @@ I'm your personal AI tutor, ready to assist you with **{courses_text}** and much
 - Provide time management strategies
 
 ### 🌟 **Quick Start Ideas:**
+- *"Show me my performance report"* 📊 ⭐ **Most Popular!**
+- *"Meri performance btao"* (in Hindi/Hinglish too!)
 - *"Help me understand [specific topic]"*
 - *"What should I focus on for my upcoming exam?"*
 - *"Can you create a study plan for this week?"*
@@ -103,6 +110,8 @@ I'm your personal AI tutor, ready to assist you with **{courses_text}** and much
 
 ### 💬 **Let's Get Started!**
 What would you like to work on today? I'm here to make your learning journey easier and more enjoyable! 😊
+
+**Pro Tip:** Ask me about your performance anytime - I'll give you a complete breakdown! 📈
 
 *Just type your question below and I'll provide detailed, helpful guidance!*"""
 
@@ -403,6 +412,254 @@ def get_welcome_message():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def get_student_performance_data(db, user_id):
+    """Get comprehensive performance data for a student"""
+    try:
+        # Get enrollments with progress
+        enrollments = list(db.enrollments.find({'student_id': user_id}))
+        courses_data = []
+        total_progress = 0
+        
+        for enrollment in enrollments:
+            course = db.courses.find_one({'_id': ObjectId(enrollment['course_id'])})
+            if course:
+                progress = enrollment.get('progress', 0)
+                total_progress += progress
+                courses_data.append({
+                    'title': course['title'],
+                    'progress': progress,
+                    'enrolled_at': enrollment.get('enrolled_at', datetime.utcnow())
+                })
+        
+        avg_progress = total_progress / len(enrollments) if enrollments else 0
+        
+        # Get assignment submissions and grades
+        submissions = list(db.submissions.find({'student_id': user_id}))
+        graded_submissions = [sub for sub in submissions if sub.get('grade') is not None]
+        
+        total_assignments = len(submissions)
+        graded_assignments = len(graded_submissions)
+        
+        grades = [sub['grade'] for sub in graded_submissions]
+        avg_grade = sum(grades) / len(grades) if grades else 0
+        
+        # Get overdue assignments
+        submitted_assignment_ids = [sub['assignment_id'] for sub in submissions]
+        enrolled_course_ids = [enrollment['course_id'] for enrollment in enrollments]
+        
+        overdue_assignments = list(db.assignments.find({
+            'course_id': {'$in': enrolled_course_ids},
+            'due_date': {'$lt': datetime.utcnow()},
+            '_id': {'$nin': [ObjectId(aid) for aid in submitted_assignment_ids]}
+        }))
+        
+        # Get achievements
+        user = db.users.find_one({'_id': ObjectId(user_id)})
+        total_points = user.get('total_points', 0)
+        achievements = user.get('achievements', [])
+        
+        # Get recent activity
+        recent_submissions = [sub for sub in submissions 
+                            if sub.get('submitted_at') and 
+                            (datetime.utcnow() - sub['submitted_at']).days <= 7]
+        
+        # Calculate performance score
+        performance_score = 0
+        if graded_assignments > 0:
+            performance_score = (avg_grade * 0.6) + (avg_progress * 0.4)
+        else:
+            performance_score = avg_progress
+        
+        # Determine learning pace
+        learning_pace = 'normal'
+        if avg_progress > 70 and len(recent_submissions) > 2:
+            learning_pace = 'fast'
+        elif avg_progress < 30 and len(recent_submissions) < 1:
+            learning_pace = 'slow'
+        
+        return {
+            'courses': courses_data,
+            'total_courses': len(enrollments),
+            'avg_progress': round(avg_progress, 1),
+            'total_assignments': total_assignments,
+            'graded_assignments': graded_assignments,
+            'avg_grade': round(avg_grade, 1),
+            'overdue_count': len(overdue_assignments),
+            'total_points': total_points,
+            'achievements_count': len(achievements),
+            'recent_activity': len(recent_submissions),
+            'performance_score': round(performance_score, 1),
+            'learning_pace': learning_pace,
+            'highest_grade': max(grades) if grades else 0,
+            'lowest_grade': min(grades) if grades else 0
+        }
+    except Exception as e:
+        print(f"Error getting performance data: {str(e)}")
+        return None
+
+def is_performance_query(message):
+    """Check if the message is asking about performance"""
+    performance_keywords = [
+        'performance', 'progress', 'meri performance', 'mera progress',
+        'kaisa chal raha', 'kaise kar raha', 'kitna acha', 'kitna progress',
+        'how am i doing', 'how is my', 'my performance', 'my progress',
+        'show my', 'tell me about my', 'btao meri', 'dikhao meri',
+        'grades', 'marks', 'score', 'result', 'achievement'
+    ]
+    message_lower = message.lower()
+    return any(keyword in message_lower for keyword in performance_keywords)
+
+def generate_performance_response(performance_data, user_name):
+    """Generate a detailed performance report"""
+    if not performance_data:
+        return "I couldn't fetch your performance data right now. Please try again later."
+    
+    # Determine performance level
+    score = performance_data['performance_score']
+    if score >= 80:
+        performance_level = "Excellent! 🌟"
+        emoji = "🎉"
+    elif score >= 60:
+        performance_level = "Good! 👍"
+        emoji = "😊"
+    elif score >= 40:
+        performance_level = "Fair - Room for Improvement 📈"
+        emoji = "💪"
+    else:
+        performance_level = "Needs Attention ⚠️"
+        emoji = "📚"
+    
+    # Build detailed response
+    response = f"""## {emoji} {user_name}, Here's Your Complete Performance Report!
+
+### 🎯 Overall Performance: {performance_level}
+**Performance Score: {performance_data['performance_score']}/100**
+
+---
+
+### 📊 Course Progress
+- **Total Courses Enrolled:** {performance_data['total_courses']}
+- **Average Progress:** {performance_data['avg_progress']}%
+- **Learning Pace:** {performance_data['learning_pace'].title()} 🚀
+
+#### 📚 Your Courses:
+"""
+    
+    for course in performance_data['courses']:
+        days_enrolled = (datetime.utcnow() - course['enrolled_at']).days
+        progress_bar = '█' * int(course['progress'] / 10) + '░' * (10 - int(course['progress'] / 10))
+        response += f"\n- **{course['title']}**\n  - Progress: [{progress_bar}] {course['progress']}%\n  - Enrolled: {days_enrolled} days ago"
+    
+    response += f"""
+
+---
+
+### 📝 Assignment Performance
+- **Total Assignments:** {performance_data['total_assignments']}
+- **Graded Assignments:** {performance_data['graded_assignments']}
+- **Average Grade:** {performance_data['avg_grade']}%
+"""
+    
+    if performance_data['graded_assignments'] > 0:
+        response += f"""- **Highest Grade:** {performance_data['highest_grade']}% 🏆
+- **Lowest Grade:** {performance_data['lowest_grade']}%
+"""
+    
+    if performance_data['overdue_count'] > 0:
+        response += f"""
+⚠️ **Overdue Assignments:** {performance_data['overdue_count']} - Please complete them soon!
+"""
+    else:
+        response += """
+✅ **No Overdue Assignments** - Great job staying on track!
+"""
+    
+    response += f"""
+
+---
+
+### 🏆 Achievements & Points
+- **Total Points Earned:** {performance_data['total_points']} 🌟
+- **Achievements Unlocked:** {performance_data['achievements_count']} 🏅
+- **Recent Activity (Last 7 days):** {performance_data['recent_activity']} submissions
+
+---
+
+### 💡 Personalized Recommendations:
+"""
+    
+    # Add personalized recommendations based on performance
+    if performance_data['performance_score'] >= 80:
+        response += """
+✨ **You're doing amazing!** Keep up the excellent work!
+- Consider helping peers who might be struggling
+- Challenge yourself with advanced topics
+- Maintain your consistent study schedule
+"""
+    elif performance_data['performance_score'] >= 60:
+        response += """
+👍 **Good progress!** Here's how to improve further:
+- Focus on courses with lower progress
+- Review assignments where you scored below 70%
+- Set aside dedicated study time each day
+- Use active learning techniques
+"""
+    elif performance_data['performance_score'] >= 40:
+        response += """
+📈 **You can do better!** Let's work on improvement:
+- Prioritize completing overdue assignments
+- Spend more time on challenging topics
+- Join study groups for collaborative learning
+- Break down complex topics into smaller parts
+- Reach out to instructors for help
+"""
+    else:
+        response += """
+⚠️ **Immediate action needed!** Let's get you back on track:
+- Schedule a meeting with your instructor
+- Complete overdue assignments as priority
+- Create a structured study schedule
+- Focus on one course at a time
+- Consider tutoring or additional support
+- Don't hesitate to ask for help!
+"""
+    
+    if performance_data['learning_pace'] == 'slow':
+        response += """
+
+🐢 **Learning Pace:** You're progressing slowly. Consider:
+- Setting daily learning goals
+- Breaking study sessions into smaller chunks
+- Using the Pomodoro technique (25 min study, 5 min break)
+- Identifying and addressing any barriers to learning
+"""
+    elif performance_data['learning_pace'] == 'fast':
+        response += """
+
+🚀 **Learning Pace:** You're a fast learner! Keep it up!
+- Consider exploring advanced materials
+- Help other students who might be struggling
+- Take on leadership roles in group projects
+"""
+    
+    response += """
+
+---
+
+### 🎯 Next Steps:
+1. Review courses with progress below 50%
+2. Complete any pending assignments
+3. Set weekly learning goals
+4. Track your progress regularly
+5. Celebrate your achievements! 🎉
+
+**Need help with specific topics?** Just ask me! I'm here to support your learning journey. 😊
+
+*Keep pushing forward - every step counts!* 💪
+"""
+    
+    return response
+
 @ai_bp.route('/chat', methods=['POST'])
 @jwt_required()
 def ai_chat():
@@ -423,31 +680,36 @@ def ai_chat():
         # Build comprehensive context
         context_parts = [f"User: {user['name']}", f"Role: {user['role']}"]
         
-        if user['role'] == 'student':
-            # Get enrolled courses
-            enrollments = list(db.enrollments.find({'student_id': user_id}))
-            if enrollments:
-                course_ids = [enrollment['course_id'] for enrollment in enrollments]
-                courses = list(db.courses.find({'_id': {'$in': [ObjectId(cid) for cid in course_ids]}}))
-                course_titles = [course['title'] for course in courses]
-                context_parts.append(f"Enrolled courses: {', '.join(course_titles)}")
-            
-
-            
-
-        
-        context = "; ".join(context_parts)
-        
-        # Generate AI response based on type
-        if chat_type == 'explain':
-            ai_response = generate_explanation(message, context)
-        elif chat_type == 'summarize':
-            ai_response = generate_summary(message, context)
-
-        elif chat_type == 'qa':
-            ai_response = generate_qa_response(message, context)
+        # Check if this is a performance query for students
+        if user['role'] == 'student' and is_performance_query(message):
+            # Get comprehensive performance data
+            performance_data = get_student_performance_data(db, user_id)
+            if performance_data:
+                ai_response = generate_performance_response(performance_data, user['name'])
+            else:
+                ai_response = "I'm having trouble fetching your performance data right now. Please try again in a moment."
         else:
-            ai_response = generate_ai_response(message, context)
+            # Regular chat flow
+            if user['role'] == 'student':
+                # Get enrolled courses
+                enrollments = list(db.enrollments.find({'student_id': user_id}))
+                if enrollments:
+                    course_ids = [enrollment['course_id'] for enrollment in enrollments]
+                    courses = list(db.courses.find({'_id': {'$in': [ObjectId(cid) for cid in course_ids]}}))
+                    course_titles = [course['title'] for course in courses]
+                    context_parts.append(f"Enrolled courses: {', '.join(course_titles)}")
+            
+            context = "; ".join(context_parts)
+            
+            # Generate AI response based on type
+            if chat_type == 'explain':
+                ai_response = generate_explanation(message, context)
+            elif chat_type == 'summarize':
+                ai_response = generate_summary(message, context)
+            elif chat_type == 'qa':
+                ai_response = generate_qa_response(message, context)
+            else:
+                ai_response = generate_ai_response(message, context)
         
         # Save chat history
         chat_data = {
@@ -456,7 +718,7 @@ def ai_chat():
             'response': ai_response,
             'type': chat_type,
             'timestamp': datetime.utcnow(),
-            'context': context
+            'context': "; ".join(context_parts)
         }
         
         db.chat_history.insert_one(chat_data)
