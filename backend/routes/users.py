@@ -211,14 +211,14 @@ def deactivate_user(target_user_id):
         db = current_app.db
 
         me = db.users.find_one({'_id': to_object_id(user_id)})
-        if not me or me.get('role') != 'admin':
+        if not me or me.get('role') not in ['admin', 'super_admin']:
             return jsonify({'error': 'Admin access required'}), 403
 
         target_oid = to_object_id(target_user_id)
         if not target_oid:
             return jsonify({'error': 'Invalid user id'}), 400
 
-        if user_id == target_user_id:
+        if str(user_id) == str(target_user_id):
             return jsonify({'error': 'Cannot deactivate your own account'}), 400
 
         target_user = db.users.find_one({'_id': target_oid})
@@ -239,7 +239,7 @@ def activate_user(target_user_id):
         db = current_app.db
 
         me = db.users.find_one({'_id': to_object_id(user_id)})
-        if not me or me.get('role') != 'admin':
+        if not me or me.get('role') not in ['admin', 'super_admin']:
             return jsonify({'error': 'Admin access required'}), 403
 
         target_oid = to_object_id(target_user_id)
@@ -285,6 +285,90 @@ def reset_user_password(target_user_id):
         hashed = generate_password_hash(new_password)
         db.users.update_one({'_id': target_oid}, {'$set': {'password': hashed, 'updated_at': datetime.utcnow()}})
         return jsonify({'message': 'Password reset successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@users_bp.route('/', methods=['POST'])
+@jwt_required()
+def create_user():
+    try:
+        user_id = get_jwt_identity()
+        db = current_app.db
+
+        me = db.users.find_one({'_id': to_object_id(user_id)})
+        if not me or me.get('role') not in ['admin', 'super_admin']:
+            return jsonify({'error': 'Admin access required'}), 403
+
+        data = request.get_json() or {}
+
+        # Required fields
+        name = data.get('name')
+        email = data.get('email')
+        password = data.get('password')
+        role = data.get('role', 'student')
+
+        if not name or not email or not password:
+            return jsonify({'error': 'Name, email, and password are required'}), 400
+
+        if len(password) < 8:
+            return jsonify({'error': 'Password must be at least 8 characters long'}), 400
+
+        # Validate role
+        if role not in ['student', 'teacher', 'admin', 'super_admin']:
+            return jsonify({'error': 'Invalid role'}), 400
+
+        # Check if email already exists (case-insensitive)
+        email = email.lower()
+        if db.users.find_one({'email': email}):
+            return jsonify({'error': 'User with this email already exists'}), 400
+
+        # Create new user
+        new_user: Dict[str, Any] = {
+            'name': name,
+            'email': email,
+            'password': generate_password_hash(password),
+            'role': role,
+            'phone': data.get('phone', ''),
+            'profile_pic': data.get('profile_pic', ''),
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow(),
+            'is_active': True,
+        }
+
+        # Add role-specific fields
+        if role == 'student':
+            new_user.update({
+                'roll_no': data.get('roll_no', ''),
+                'department': data.get('department', ''),
+                'year': data.get('year', ''),
+                'semester': data.get('semester', ''),
+                'enrolled_courses': [],
+                'completed_courses': [],
+                'total_points': 0,
+                'badges': [],
+            })
+        elif role == 'teacher':
+            new_user.update({
+                'employee_id': data.get('employee_id', ''),
+                'department': data.get('department', ''),
+                'designation': data.get('designation', ''),
+                'courses_created': [],
+                'specializations': data.get('specializations', []),
+            })
+        elif role in ['admin', 'super_admin']:
+            new_user.update({
+                'department': data.get('department', ''),
+            })
+
+        result = db.users.insert_one(new_user)
+        new_user['_id'] = str(result.inserted_id)
+        new_user.pop('password', None)
+
+        return jsonify({
+            'message': 'User created successfully',
+            'user': serialize_user(new_user)
+        }), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -428,10 +512,10 @@ def delete_user(target_user_id):
         db = current_app.db
 
         me = db.users.find_one({'_id': to_object_id(user_id)})
-        if not me or me.get('role') != 'admin':
+        if not me or me.get('role') not in ['admin', 'super_admin']:
             return jsonify({'error': 'Admin access required'}), 403
 
-        if user_id == target_user_id:
+        if str(user_id) == str(target_user_id):
             return jsonify({'error': 'Cannot delete your own account'}), 400
 
         target_oid = to_object_id(target_user_id)

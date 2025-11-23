@@ -41,7 +41,16 @@ const UserManagement: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<User>>({});
+  const [addFormData, setAddFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'student' as User['role'],
+    department: '',
+    phone: ''
+  });
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -411,6 +420,77 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  const handleAddUser = async () => {
+    // Validate form
+    if (!addFormData.name || !addFormData.email || !addFormData.password) {
+      alert('Please fill in all required fields (Name, Email, Password)');
+      return;
+    }
+
+    if (addFormData.password.length < 8) {
+      alert('Password must be at least 8 characters long');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        alert('Authentication token not found. Please login again.');
+        return;
+      }
+
+      const response = await fetch('http://localhost:5000/api/users', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(addFormData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setShowAddModal(false);
+        setAddFormData({
+          name: '',
+          email: '',
+          password: '',
+          role: 'student',
+          department: '',
+          phone: ''
+        });
+        await fetchUsers(); // Refresh the user list
+        alert(result.message || 'User created successfully');
+      } else {
+        let errorMessage = 'Failed to create user';
+        if (response.status === 401) {
+          errorMessage = 'Authentication failed. Please login again.';
+        } else if (response.status === 403) {
+          errorMessage = 'Access denied. Admin privileges required.';
+        } else if (response.status === 400) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || 'Invalid user data';
+          } catch {
+            errorMessage = 'Invalid user data';
+          }
+        } else {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            errorMessage = `Server error (${response.status})`;
+          }
+        }
+        alert(errorMessage);
+      }
+    } catch (err: any) {
+      console.error('Error creating user:', err);
+      alert('Error: Cannot connect to server. Please check if the backend is running.');
+    }
+  };
+
   const handleViewUser = async (userId: string) => {
     try {
       const token = localStorage.getItem('access_token');
@@ -527,7 +607,10 @@ const UserManagement: React.FC = () => {
           >
             Test Connection
           </button>
-          <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add User
           </button>
@@ -732,24 +815,26 @@ const UserManagement: React.FC = () => {
                           >
                             <Key className="h-4 w-4" />
                           </button>
-                          {user.is_active ? (
-                            <button
-                              onClick={() => handleUserAction(user._id, 'deactivate')}
-                              className="p-1 text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
-                              title="Block/Deactivate User"
-                            >
-                              <Lock className="h-4 w-4" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleUserAction(user._id, 'activate')}
-                              className="p-1 text-green-600 hover:text-green-900 hover:bg-green-50 rounded"
-                              title="Unblock/Activate User"
-                            >
-                              <Unlock className="h-4 w-4" />
-                            </button>
+                          {currentUser?._id !== user._id && (
+                            user.is_active ? (
+                              <button
+                                onClick={() => handleUserAction(user._id, 'deactivate')}
+                                className="p-1 text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
+                                title="Block/Deactivate User"
+                              >
+                                <Lock className="h-4 w-4" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleUserAction(user._id, 'activate')}
+                                className="p-1 text-green-600 hover:text-green-900 hover:bg-green-50 rounded"
+                                title="Unblock/Activate User"
+                              >
+                                <Unlock className="h-4 w-4" />
+                              </button>
+                            )
                           )}
-                          {currentUser?.role === 'super_admin' && (
+                          {currentUser?.role === 'super_admin' && currentUser?._id !== user._id && (
                             <button
                               onClick={() => handleDeleteUser(user._id, user.name)}
                               className="p-1 text-red-700 hover:text-red-900 hover:bg-red-50 rounded"
@@ -1022,6 +1107,136 @@ const UserManagement: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 Update User
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add User Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Add New User</h2>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setAddFormData({
+                    name: '',
+                    email: '',
+                    password: '',
+                    role: 'student',
+                    department: '',
+                    phone: ''
+                  });
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={addFormData.name}
+                  onChange={(e) => setAddFormData({...addFormData, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter full name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={addFormData.email}
+                  onChange={(e) => setAddFormData({...addFormData, email: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="user@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  value={addFormData.password}
+                  onChange={(e) => setAddFormData({...addFormData, password: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Minimum 8 characters"
+                />
+                <p className="text-xs text-gray-500 mt-1">Password must be at least 8 characters long</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select
+                  value={addFormData.role}
+                  onChange={(e) => setAddFormData({...addFormData, role: e.target.value as User['role']})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="student">Student</option>
+                  <option value="teacher">Teacher</option>
+                  <option value="admin">Admin</option>
+                  <option value="super_admin">Super Admin</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                <input
+                  type="text"
+                  value={addFormData.department}
+                  onChange={(e) => setAddFormData({...addFormData, department: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Computer Science"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <input
+                  type="text"
+                  value={addFormData.phone}
+                  onChange={(e) => setAddFormData({...addFormData, phone: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Phone number"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 mt-6">
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setAddFormData({
+                    name: '',
+                    email: '',
+                    password: '',
+                    role: 'student',
+                    department: '',
+                    phone: ''
+                  });
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddUser}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Create User
               </button>
             </div>
           </div>

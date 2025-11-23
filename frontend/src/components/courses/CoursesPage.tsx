@@ -30,7 +30,8 @@ export const CoursesPage: React.FC = () => {
 
   const handleCourseClick = (courseId: string) => {
     // Navigate to course detail page with proper route
-    window.location.href = `/course-detail?id=${courseId}`;
+    window.history.pushState({}, '', `/courses/${courseId}`);
+    window.dispatchEvent(new Event('navigation'));
   };
 
   const handleCourseUpdate = () => {

@@ -11,7 +11,7 @@ export const VideoManagement: React.FC = () => {
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const isTeacher = user?.role === 'teacher';
+  const isTeacher = user?.role === 'teacher' || user?.role === 'admin' || user?.role === 'super_admin';
 
   const handleUploadComplete = (videoData: any) => {
     // Refresh the video list
@@ -30,7 +30,7 @@ export const VideoManagement: React.FC = () => {
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h2>
           <p className="text-gray-600">
-            Only teachers can access the video management page.
+            Only teachers and administrators can access the video management page.
           </p>
         </div>
       </div>

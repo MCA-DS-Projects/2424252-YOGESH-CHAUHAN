@@ -5,7 +5,6 @@ import {
   X,
   AlertTriangle,
   TrendingDown,
-  TrendingUp,
   Clock,
   User,
   CheckCircle
@@ -36,7 +35,7 @@ const LearnerAlerts: React.FC<LearnerAlertsProps> = ({ className = '' }) => {
     
     setLoading(true);
     try {
-      const response = await learnerAnalyticsAPI.getPerformanceAlerts();
+      const response = await learnerAnalyticsAPI.getPerformanceAlerts() as { alerts: Alert[] };
       setAlerts(response.alerts || []);
     } catch (error) {
       console.error('Failed to fetch learner alerts:', error);

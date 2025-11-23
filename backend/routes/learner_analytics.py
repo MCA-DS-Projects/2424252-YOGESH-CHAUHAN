@@ -71,9 +71,11 @@ def get_learning_pace(student_data, course_id=None):
     
     # Calculate average progress rate (progress per day)
     progress_rates = []
+    total_progress = 0
     for enrollment in enrollments:
         enrollment_date = enrollment.get('enrolled_at', datetime.utcnow())
         current_progress = enrollment.get('progress', 0)
+        total_progress += current_progress
         days_enrolled = max(1, (datetime.utcnow() - enrollment_date).days)
         progress_rate = current_progress / days_enrolled
         progress_rates.append(progress_rate)
@@ -82,8 +84,9 @@ def get_learning_pace(student_data, course_id=None):
         return 'unknown'
     
     avg_progress_rate = statistics.mean(progress_rates)
+    avg_progress = total_progress / len(enrollments)
     
-    # Get submission frequency
+    # Get submission frequency and performance
     recent_submissions = list(db.submissions.find({
         'student_id': student_id,
         'submitted_at': {'$gte': datetime.utcnow() - timedelta(days=30)}
@@ -91,11 +94,23 @@ def get_learning_pace(student_data, course_id=None):
     
     submission_frequency = len(recent_submissions) / 30  # submissions per day
     
-    # Classify based on progress rate and activity
-    if avg_progress_rate > 2.0 and submission_frequency > 0.2:  # >2% progress per day, >6 submissions per month
+    # Get all submissions for grade analysis
+    all_submissions = list(db.submissions.find({'student_id': student_id}))
+    graded_submissions = [sub for sub in all_submissions if sub.get('grade') is not None]
+    avg_grade = statistics.mean([sub['grade'] for sub in graded_submissions]) if graded_submissions else 0
+    
+    # More balanced classification logic
+    # Fast learners: High progress OR good grades with activity OR high submission rate
+    if (avg_progress_rate > 1.5 or 
+        (avg_grade > 75 and submission_frequency > 0.1) or 
+        submission_frequency > 0.2 or
+        (avg_progress > 60 and len(recent_submissions) > 2)):
         return 'fast'
-    elif avg_progress_rate < 0.5 or submission_frequency < 0.1:  # <0.5% progress per day, <3 submissions per month
+    
+    # Slow learners: Low progress AND low activity OR very low grades
+    elif (avg_progress_rate < 0.8 and submission_frequency < 0.1) or avg_grade < 50:
         return 'slow'
+    
     else:
         return 'normal'
 
@@ -241,10 +256,12 @@ def get_performance_analysis():
             
             student_analysis.append(analysis)
             
-            # Categorize students
-            if learning_pace == 'slow' or performance_score < 50:
+            # Categorize students (balanced criteria)
+            # Slow learners: explicitly marked as slow OR low performance
+            if learning_pace == 'slow' or performance_score < 55:
                 slow_learners.append(analysis)
-            elif learning_pace == 'fast' and performance_score > 80:
+            # Fast learners: explicitly marked as fast OR good performance
+            elif learning_pace == 'fast' or performance_score >= 70:
                 fast_learners.append(analysis)
         
         # Sort by performance score
