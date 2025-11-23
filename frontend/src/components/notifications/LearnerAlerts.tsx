@@ -51,7 +51,7 @@ const LearnerAlerts: React.FC<LearnerAlertsProps> = ({ className = '' }) => {
     return () => clearInterval(interval);
   }, [user]);
 
-  const getAlertIcon = (type: string, severity: string) => {
+  const getAlertIcon = (type: string) => {
     switch (type) {
       case 'inactive':
         return <Clock className="h-4 w-4" />;
@@ -79,12 +79,7 @@ const LearnerAlerts: React.FC<LearnerAlertsProps> = ({ className = '' }) => {
     }
   };
 
-  const dismissAlert = (alertIndex: number) => {
-    const alertKey = `${alerts[alertIndex].student_id}-${alerts[alertIndex].type}-${alerts[alertIndex].created_at}`;
-    setDismissedAlerts(prev => new Set([...prev, alertKey]));
-  };
-
-  const visibleAlerts = alerts.filter((alert, index) => {
+  const visibleAlerts = alerts.filter((alert) => {
     const alertKey = `${alert.student_id}-${alert.type}-${alert.created_at}`;
     return !dismissedAlerts.has(alertKey);
   });
@@ -144,50 +139,55 @@ const LearnerAlerts: React.FC<LearnerAlertsProps> = ({ className = '' }) => {
               </div>
             ) : visibleAlerts.length > 0 ? (
               <div className="divide-y divide-gray-200">
-                {visibleAlerts.map((alert, index) => (
-                  <div
-                    key={`${alert.student_id}-${alert.type}-${index}`}
-                    className={`p-4 border-l-4 ${
-                      alert.severity === 'high' ? 'border-red-500' :
-                      alert.severity === 'medium' ? 'border-yellow-500' :
-                      'border-blue-500'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start space-x-3 flex-1">
-                        <div className={`p-1 rounded-full ${getSeverityColor(alert.severity)}`}>
-                          {getAlertIcon(alert.type, alert.severity)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2">
-                            <User className="h-4 w-4 text-gray-400" />
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {alert.student_name}
-                            </p>
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              alert.severity === 'high' ? 'bg-red-100 text-red-800' :
-                              alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-blue-100 text-blue-800'
-                            }`}>
-                              {alert.severity}
-                            </span>
+                {visibleAlerts.map((alert) => {
+                  const alertKey = `${alert.student_id}-${alert.type}-${alert.created_at}`;
+                  return (
+                    <div
+                      key={alertKey}
+                      className={`p-4 border-l-4 ${
+                        alert.severity === 'high' ? 'border-red-500' :
+                        alert.severity === 'medium' ? 'border-yellow-500' :
+                        'border-blue-500'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start space-x-3 flex-1">
+                          <div className={`p-1 rounded-full ${getSeverityColor(alert.severity)}`}>
+                            {getAlertIcon(alert.type)}
                           </div>
-                          <p className="text-sm text-gray-600 mt-1">{alert.message}</p>
-                          <p className="text-xs text-gray-500 mt-2">
-                            {new Date(alert.created_at).toLocaleDateString()} • {alert.type}
-                          </p>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2">
+                              <User className="h-4 w-4 text-gray-400" />
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {alert.student_name}
+                              </p>
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                alert.severity === 'high' ? 'bg-red-100 text-red-800' :
+                                alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-blue-100 text-blue-800'
+                              }`}>
+                                {alert.severity}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">{alert.message}</p>
+                            <p className="text-xs text-gray-500 mt-2">
+                              {new Date(alert.created_at).toLocaleDateString()} • {alert.type}
+                            </p>
+                          </div>
                         </div>
+                        <button
+                          onClick={() => {
+                            setDismissedAlerts(prev => new Set([...prev, alertKey]));
+                          }}
+                          className="ml-2 text-gray-400 hover:text-gray-600"
+                          title="Dismiss alert"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => dismissAlert(index)}
-                        className="ml-2 text-gray-400 hover:text-gray-600"
-                        title="Dismiss alert"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="p-8 text-center">
